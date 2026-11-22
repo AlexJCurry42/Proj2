@@ -77,7 +77,7 @@ possible for any web page there. The viewer works alongside this:
   present) is at the bottom or top, and mirror the strip (hide the
   same width on the other side so both eyes get a symmetric frame). Settings
   are remembered per orientation.
-- Check on the **Align** card: the gold vertical line should sit exactly on
+- Check on the **Align** card: the blue vertical line should sit exactly on
   the fold. Diagnostics shows the layout, scale and hinge position.
 - The browser resamples the picture by about 7%, so it is slightly soft. A
   native app is the only route to sharp 1:1 pixels across the full width.
@@ -98,11 +98,15 @@ checkerboard; any moire or blur means the browser is scaling.
 - **Library.** Pick a viewing angle, then a tile: *Fold guide* and *Align*
   under Prepare, the 3D pictures below. The app reopens on the last picture.
 - **Settings** (a drawer on the right, so the hinge stays visible):
+  - *Appearance*: a **Dark mode** switch. Dark is black, light is white, both
+    with a blue accent; it follows the system setting until you use the switch
+    (`t` on a keyboard). In light mode the fold-guide and alignment cards are
+    shown as dark lines on white; the 3D pictures are never altered.
   - *Picture*: viewing angle and style.
   - *Display*: full screen, and True size or Fit (a scaled preview; the 3D
     does not work in it).
   - *Hinge alignment* (iPhone Duo): **Adjust** opens the alignment card with
-    large -0.5 / -0.1 / +0.1 / +0.5 mm buttons to move the gold line onto the
+    large -0.5 / -0.1 / +0.1 / +0.5 mm buttons to move the blue line onto the
     fold; plus the status strip side, the system bar position when iOS
     reserves one, and the mirror switch.
   - *Tools*: setup guide, save or open the picture, pixel test, diagnostics,
@@ -115,7 +119,7 @@ checkerboard; any moire or blur means the browser is scaling.
      (straight lines, a perfect circle). Taller in the middle: fold further.
      Pinched: open slightly.
   3. *Centre*: on the Align card, nose in line with the hinge, eyes level with
-     the gold centre line, both halves equally wide.
+     the blue centre line, both halves equally wide.
   4. *Look*: cross your eyes until the two dots become three, then look down.
   Tap the picture to hide the card (a small chip brings it back), swipe the
   card left or right to change step, or use Continue / Back.

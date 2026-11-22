@@ -208,12 +208,12 @@ def test_fold_guide_shows_the_target_through_the_cyclopean_eye(hinge):
         i, j = int(round(float(i))), int(round(float(j)))
         return img[j - 1:j + 2, i - 1:i + 2].reshape(-1, 3)
 
-    gold = np.array(guides.FOLD_GOLD)
+    accent = np.array(guides.FOLD_ACCENT)
     r = lay["ring_r"]
     for ang in np.radians(np.arange(7.5, 360, 15)):
         on = patch(r * np.cos(ang), r * np.sin(ang))
         best = on[np.argmax(on.sum(axis=1))]
-        assert best.sum() > 0.45 * gold.sum() and best[0] > best[2] + 15, (ang, best)      # the gold ring
+        assert best.sum() > 0.45 * accent.sum() and best[2] > best[0] + 15, (ang, best)    # the blue ring
         gap = patch(0.5 * (lay["inner_r"] + lay["tick_r0_long"]) * np.cos(ang), 0.5 * (lay["inner_r"] + lay["tick_r0_long"]) * np.sin(ang))
         assert gap.max() < 40, (ang, gap.max())                                              # nothing between dial and ticks
     for x in np.linspace(-0.9, 0.9, 13) * half_w:
@@ -247,4 +247,4 @@ def test_fold_guide_band_is_left_black():
     nb = guide_band_rows(DEV)
     assert (img[:nb] == np.array(guides.FOLD_BG)).all()          # no text, no dots: the viewer's guide explains it
     below = img[nb:].astype(int)
-    assert ((below[..., 0] > 150) & (below[..., 0] > below[..., 2] + 40)).sum() > 100    # the gold ring is there
+    assert ((below[..., 2] > 150) & (below[..., 2] > below[..., 0] + 40)).sum() > 100    # the blue ring is there

@@ -63,10 +63,10 @@ FOLD_SAFE_WIDTH_FRAC = 0.78      # iOS hides ~9% of the Duo's inner display behi
                                  # one side (the viewer mirrors it on the other): keep the frame inside
 FOLD_MARGIN_MM = 6.0             # background kept around the picture frame in the target bitmap
 FOLD_TARGET_OVERSAMPLE = 1.5     # target bitmap pixels per display pixel
-FOLD_BG = (5, 5, 7)              # near black
-FOLD_INK = (236, 231, 221)       # warm ivory
-FOLD_INK_DIM = (128, 124, 116)
-FOLD_GOLD = (205, 178, 122)      # champagne
+FOLD_BG = (0, 0, 0)              # black (the viewer inverts the cards to white in light mode)
+FOLD_INK = (240, 243, 248)       # white
+FOLD_INK_DIM = (124, 131, 142)
+FOLD_ACCENT = (76, 141, 255)     # blue, the viewer's accent
 
 
 # --------------------------------------------------------------------- fonts
@@ -363,7 +363,7 @@ def alignment_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> n
     grid = 10.0
 
     img = np.zeros((h, w, 3), dtype=np.float64)
-    img[:] = FOLD_BG                             # same palette as the fold guide: ivory and gold on black
+    img[:] = FOLD_BG                             # same palette as the fold guide: white and blue on black
 
     def over(cov, colour):
         a = _quantize(cov)[..., None]
@@ -373,11 +373,11 @@ def alignment_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> n
     fx = qx - np.round(qx / grid) * grid
     fy = qy - np.round(qy / grid) * grid
     cov = np.maximum(_line_cov(fx, g_x, hw_grid), _line_cov(fy, g_y, hw_grid))
-    over(cov, (58, 56, 52))
+    over(cov, (52, 56, 62))
 
     # Crosshair through the centre, across the whole display.
     cov = np.maximum(_line_cov(qx, g_x, hw_main), _line_cov(qy, g_y, hw_main))
-    over(cov, FOLD_GOLD)
+    over(cov, FOLD_ACCENT)
 
     # Inscribed circle.
     rho = np.hypot(qx, qy)
@@ -385,7 +385,7 @@ def alignment_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> n
         nx = np.where(rho > 0, qx / rho, 0.0)
         ny = np.where(rho > 0, qy / rho, 0.0)
     g_r = np.hypot(nx * dqx_di + ny * dqy_di, nx * dqx_dj + ny * dqy_dj)
-    over(_line_cov(rho - half, g_r, hw_main), (176, 171, 160))
+    over(_line_cov(rho - half, g_r, hw_main), (168, 174, 184))
 
     # Square: four segments with square-capped ends.
     def extent(f_along, g_along):
@@ -529,13 +529,13 @@ def fold_guide_target(half_w: float, half_h: float, px_per_mm: float, hinge_deg:
     box(half_w, half_h, lay["frame_w"], FOLD_INK)
     box(half_w - lay["inner_inset"], half_h - lay["inner_inset"], lay["inner_w"], FOLD_INK_DIM)
 
-    # Parallel rules across the full width, top and bottom; the middle one in gold.
+    # Parallel rules across the full width, top and bottom; the middle one in the accent blue.
     xr = half_w - 2.2 * lay["inner_inset"]
     for n, y in enumerate(lay["rules_y"]):
-        hline(y, -xr, xr, lay["rule_w"], FOLD_GOLD if n % 3 == 1 else FOLD_INK_DIM)
+        hline(y, -xr, xr, lay["rule_w"], FOLD_ACCENT if n % 3 == 1 else FOLD_INK_DIM)
 
-    # Dial on the hinge: gold ring, graduations, fine inner circle.
-    circle(lay["ring_r"], lay["ring_w"], FOLD_GOLD)
+    # Dial on the hinge: accent ring, graduations, fine inner circle.
+    circle(lay["ring_r"], lay["ring_w"], FOLD_ACCENT)
     circle(lay["inner_r"], lay["inner_w"], FOLD_INK_DIM)
     for n in range(lay["ticks"]):
         ang = 2.0 * math.pi * n / lay["ticks"]
@@ -561,7 +561,7 @@ def fold_guide_target(half_w: float, half_h: float, px_per_mm: float, hinge_deg:
               width=max(1, int(round(0.34 * deg_r))))
     cap = _card_font(int(round(0.105 * r_in * k)))
     if cap.size >= 9:
-        _spaced_text(d, X(0), Y(0.60 * r_in), "FOLD", cap, 0.42 * cap.size, FOLD_GOLD)
+        _spaced_text(d, X(0), Y(0.60 * r_in), "FOLD", cap, 0.42 * cap.size, FOLD_ACCENT)
         _spaced_text(d, X(0), Y(-0.60 * r_in), "DEGREES", cap, 0.42 * cap.size, FOLD_INK_DIM)
 
     # Small captions beside the dial.
