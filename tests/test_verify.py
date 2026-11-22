@@ -348,3 +348,8 @@ def test_vertical_head_offset_is_compensated(plaque_case, g120):
     assert e["recon"]["dv_field"] is not None
     assert e["valid_fraction_linkable"] > 0.6
     assert e["median_abs_err_mm"] < 1.0
+    # The median hides pattern-repeat lock (wrong repeats are ~30 mm off but agree L/R):
+    # also bound the outliers and check the estimated field matches the design field.
+    assert e["inlier_fraction"] > 0.95
+    assert e["p95_abs_err_mm"] < 2.0
+    assert e["vertical_disparity_est_p95_arcmin"] == pytest.approx(up["p95_arcmin"], rel=0.25)
