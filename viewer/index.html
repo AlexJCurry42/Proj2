@@ -13,7 +13,8 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
-  :root { --fg: #d8dbe2; --dim: #8a90a0; --panel: rgba(18, 20, 26, 0.92); --line: #2c3040; --accent: #5fd0ff; }
+  :root { --fg: #ece7dd; --dim: #9a958b; --panel: rgba(12, 12, 14, 0.74); --line: rgba(236, 231, 221, 0.16);
+    --accent: #cdb27a; --ease: cubic-bezier(0.22, 0.61, 0.36, 1); }
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; color: var(--fg);
     overflow: hidden; overscroll-behavior: none; -webkit-text-size-adjust: 100%;
     font: 16px/1.35 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif; }
@@ -26,32 +27,34 @@
   #img.fit, #img.panel { image-rendering: auto; }
   #mask { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: #000; display: none; pointer-events: none; }
   #panelRow { display: none; }
-  .panelmode #panelRow { display: flex; }
+  .panelmode.aligning #panelRow { display: flex; }
   #nudgeVal { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
   #pixtest { position: absolute; left: 0; top: 0; display: none; image-rendering: pixelated; }
-  button { font: inherit; color: var(--fg); background: #1d2029; border: 1px solid var(--line); border-radius: 12px;
-    min-width: 48px; min-height: 48px; padding: 8px 14px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-  button:active { background: #2a2f3c; }
-  button.on { border-color: var(--accent); color: #fff; background: #1b3442; }
-  button:disabled { opacity: 0.35; }
+  button { font: inherit; font-weight: 500; letter-spacing: 0.01em; color: var(--fg); background: rgba(236, 231, 221, 0.06);
+    border: 1px solid var(--line); border-radius: 999px; min-width: 48px; min-height: 46px; padding: 8px 16px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; transition: background 0.2s var(--ease), border-color 0.2s var(--ease), opacity 0.2s; }
+  button:active { background: rgba(236, 231, 221, 0.16); }
+  button.on { border-color: var(--accent); color: var(--accent); background: rgba(205, 178, 122, 0.10); }
+  button:disabled { opacity: 0.3; }
   .overlay { position: fixed; left: 0; right: 0; background: var(--panel); display: none; z-index: 10;
+    -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2);
     padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left)); }
   .show .overlay { display: block; }
   #top { top: 0; padding-top: max(10px, env(safe-area-inset-top)); }
   #bottom { bottom: 0; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .row + .row { margin-top: 8px; }
-  #title { font-weight: 600; font-size: 18px; margin: 0 8px; flex: 1 1 auto; min-width: 140px; }
+  #title { font-weight: 500; font-size: 18px; letter-spacing: 0.01em; margin: 0 8px; flex: 1 1 auto; min-width: 140px; }
   #title small { display: block; font-weight: 400; color: var(--dim); font-size: 14px; }
   .hint { color: var(--dim); font-size: 14px; }
   .pills { display: flex; flex-wrap: wrap; gap: 6px; }
   .pills button { min-width: 56px; padding: 8px 10px; }
-  .sheet { position: fixed; inset: 0; z-index: 20; background: rgba(8, 9, 12, 0.97); overflow-y: auto;
+  .sheet { position: fixed; inset: 0; z-index: 20; background: rgba(6, 6, 8, 0.97); overflow-y: auto;
     -webkit-overflow-scrolling: touch; touch-action: pan-y; display: none;
     padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); }
   .sheet.open { display: block; }
-  .sheet h2 { font-size: 20px; margin: 4px 0 12px; }
-  .sheet h3 { font-size: 17px; margin: 18px 0 8px; color: #fff; }
+  .sheet h2 { font-size: 26px; font-weight: 300; letter-spacing: 0.01em; margin: 4px 0 12px; }
+  .sheet h3 { font-size: 12px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; margin: 20px 0 10px; color: var(--dim); }
   .group { border-top: 1px solid var(--line); padding: 6px 0 10px; }
   .close { float: right; }
   #diagText { font: 13px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; color: var(--fg);
@@ -63,12 +66,94 @@
   .warn { color: #ffcf6a; }
   #fsWarn { display: none; }
   #fsWarn.on { display: flex; }
-  #guideRow, #guideTextRow { display: none; }
-  .guiding #guideRow, .guiding #guideTextRow { display: flex; }
-  .guiding #hintRow, .guiding #saveRow, .guiding #styleRow, .guiding #panelRow { display: none; }
-  #guideStep { border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: 4px 12px; font-size: 14px; white-space: nowrap; }
-  #guideTitle { font-weight: 600; font-size: 18px; }
-  #guideText { font-size: 17px; line-height: 1.4; }
+  /* ---- setup guide: a glass card on the left half, with an animated illustration per step */
+  .guiding .overlay { display: none !important; }
+  #guide { position: fixed; left: 16px; bottom: calc(14px + env(safe-area-inset-bottom)); width: 380px; z-index: 12; display: none;
+    box-sizing: border-box; padding: 18px 20px 18px; border-radius: 26px; border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(22, 22, 25, 0.80), rgba(10, 10, 12, 0.86));
+    -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    transition: opacity 0.35s var(--ease), transform 0.45s var(--ease); touch-action: pan-y; -webkit-user-select: none; user-select: none; }
+  .guiding #guide { display: block; }
+  .g-hidden #guide { opacity: 0; transform: translateY(18px) scale(0.985); pointer-events: none; }
+  #gArt { height: 104px; margin: -2px 0 6px; }
+  #gArt svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  .g-eyebrow { display: flex; align-items: center; gap: 12px; font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+  .g-dots { display: flex; gap: 5px; margin-left: auto; }
+  .g-dots i { width: 18px; height: 2px; border-radius: 2px; background: var(--line); transition: background 0.4s var(--ease); }
+  .g-dots i.on { background: var(--accent); }
+  #gTitle { font-size: 30px; font-weight: 300; letter-spacing: 0.005em; margin: 8px 0 6px; line-height: 1.1; }
+  #gText { font-size: 15.5px; line-height: 1.5; margin: 0; color: rgba(236, 231, 221, 0.86); }
+  #gFoot { font-size: 13px; line-height: 1.45; margin: 8px 0 0; color: var(--dim); }
+  #gTap { display: none; font-size: 12px; letter-spacing: 0.04em; margin: 10px 0 0; color: var(--dim); }
+  #gTap.on { display: block; }
+  #gWarn { display: none; font-size: 12.5px; line-height: 1.4; margin: 10px 0 0; color: #e5c07a; }
+  #gWarn.on { display: block; }
+  .g-angle { display: none; align-items: center; gap: 10px; margin: 14px 0 0; }
+  .g-angle.on { display: flex; }
+  .g-angle .lbl { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); margin-right: auto; }
+  .g-angle button { min-width: 40px; min-height: 40px; padding: 0; font-size: 18px; line-height: 1; }
+  #gAngleVal { min-width: 64px; text-align: center; font-size: 22px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  #gLive { display: none; align-items: baseline; gap: 12px; margin: 12px 0 0; }
+  #gLive.on { display: flex; }
+  #gLiveVal { font-size: 34px; font-weight: 200; font-variant-numeric: tabular-nums; transition: color 0.3s var(--ease); }
+  #gLive.match #gLiveVal { color: var(--accent); }
+  #gLiveHint { font-size: 13px; color: var(--dim); }
+  .g-actions { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; }
+  .g-actions .ghost { background: transparent; }
+  .g-actions .primary { margin-left: auto; min-width: 128px; background: var(--fg); color: #0b0b0d; border-color: var(--fg); font-weight: 600; }
+  .g-actions .primary:active { background: #fff; }
+  #bGuideExit { position: absolute; top: 12px; right: 12px; min-width: 34px; min-height: 34px; width: 34px; padding: 0; border-color: transparent;
+    background: transparent; color: var(--dim); font-size: 20px; line-height: 1; }
+  .g-tap { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--accent); vertical-align: 1px;
+    animation: gPulse 2.2s var(--ease) infinite; }
+  #guideChip { position: fixed; left: 16px; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 11; display: none; min-height: 34px; padding: 6px 14px;
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); background: rgba(10, 10, 12, 0.6);
+    opacity: 0; transition: opacity 0.4s var(--ease) 0.15s; }
+  .guiding #guideChip { display: block; pointer-events: none; }
+  .guiding.g-hidden #guideChip { opacity: 1; pointer-events: auto; }
+  .g-swap > * { animation: gIn 0.5s var(--ease) both; }
+  .g-swap.back > * { animation-name: gInBack; }
+  .g-swap > *:nth-child(2) { animation-delay: 0.04s; } .g-swap > *:nth-child(3) { animation-delay: 0.08s; }
+  .g-swap > *:nth-child(4) { animation-delay: 0.12s; } .g-swap > *:nth-child(n+5) { animation-delay: 0.16s; }
+  @keyframes gIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+  @keyframes gInBack { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+  @keyframes gPulse { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.15); } }
+  /* illustrations: hairline drawings, ivory with one gold accent; every loop is 5 s */
+  .art * { fill: none; stroke: var(--fg); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .art .gold { stroke: var(--accent); } .art .dim { stroke: var(--dim); } .art .dash { stroke-dasharray: 2 4; }
+  .art .fillfg { fill: var(--fg); stroke: none; } .art .fillgold { fill: var(--accent); stroke: none; }
+  .art text { fill: var(--accent); stroke: none; font: 300 13px -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; text-anchor: middle; }
+  .art .pane { transform-box: fill-box; }
+  .art .paneL { transform-origin: 100% 50%; animation: gOpen 5s var(--ease) infinite; }
+  .art .paneR { transform-origin: 0% 50%; animation: gOpen 5s var(--ease) infinite; }
+  @keyframes gOpen { 0%, 10% { transform: scaleX(0.10); } 52%, 90% { transform: scaleX(1); } 100% { transform: scaleX(0.10); } }
+  .art .arm { transform-box: view-box; transform-origin: 100px 26px; }
+  .art .armL { transform: rotate(calc(-1 * var(--fold, 30deg))); } .art .armR { transform: rotate(var(--fold, 30deg)); }
+  .art.swing .armL { animation: gFoldL 5s var(--ease) infinite; } .art.swing .armR { animation: gFoldR 5s var(--ease) infinite; }
+  @keyframes gFoldL { 0%, 10% { transform: rotate(0deg); } 55%, 90% { transform: rotate(calc(-1 * var(--fold, 30deg))); } 100% { transform: rotate(0deg); } }
+  @keyframes gFoldR { 0%, 10% { transform: rotate(0deg); } 55%, 90% { transform: rotate(var(--fold, 30deg)); } 100% { transform: rotate(0deg); } }
+  .art .arc { animation: gFade 5s var(--ease) infinite; }
+  @keyframes gFade { 0%, 40% { opacity: 0; } 60%, 90% { opacity: 1; } 100% { opacity: 0; } }
+  .art.live .armL, .art.live .armR, .art.live .arc { animation: none; opacity: 1; transition: transform 0.25s var(--ease); }
+  .art .head { animation: gCentre 5s var(--ease) infinite; }
+  @keyframes gCentre { 0%, 12% { transform: translateX(30px); } 55%, 92% { transform: translateX(0); } 100% { transform: translateX(30px); } }
+  .art .ok { transform-box: fill-box; transform-origin: center; animation: gOk 5s var(--ease) infinite; }
+  @keyframes gOk { 0%, 55% { opacity: 0; transform: scale(0.6); } 70% { opacity: 1; transform: scale(1); } 92% { opacity: 1; } 100% { opacity: 0; } }
+  .art .dOut { animation: gOutL 5s var(--ease) infinite; } .art .dOut.r { animation-name: gOutR; }
+  .art .dIn { animation: gInL 5s var(--ease) infinite; } .art .dIn.r { animation-name: gInR; }
+  @keyframes gOutL { 0%, 14% { transform: none; opacity: 1; } 58%, 92% { transform: translateX(-22px); opacity: 0.45; } 100% { transform: none; opacity: 1; } }
+  @keyframes gOutR { 0%, 14% { transform: none; opacity: 1; } 58%, 92% { transform: translateX(22px); opacity: 0.45; } 100% { transform: none; opacity: 1; } }
+  @keyframes gInL { 0%, 14% { transform: none; opacity: 0; } 20% { opacity: 0.6; } 58%, 92% { transform: translateX(22px); opacity: 1; } 100% { transform: none; opacity: 0; } }
+  @keyframes gInR { 0%, 14% { transform: none; opacity: 0; } 20% { opacity: 0.6; } 58%, 92% { transform: translateX(-22px); opacity: 1; } 100% { transform: none; opacity: 0; } }
+  .art .down { animation: gDown 5s var(--ease) infinite; }
+  @keyframes gDown { 0%, 60% { opacity: 0; transform: translateY(-6px); } 78%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .art *, .g-swap > *, .g-tap { animation: none !important; }
+    .art .dOut { transform: translateX(-22px); opacity: 0.45; } .art .dOut.r { transform: translateX(22px); }
+    .art .dIn { transform: translateX(22px); } .art .dIn.r { transform: translateX(-22px); }
+    #guide { transition: none; }
+  }
   html:fullscreen, html:-webkit-full-screen { background: #000; }
 </style>
 </head>
@@ -103,12 +188,6 @@
 </div>
 <div class="overlay" id="bottom">
   <div class="row warn" id="fsWarn"><span id="fsWarnText"></span></div>
-  <div class="row" id="guideRow">
-    <span id="guideStep"></span><span id="guideTitle"></span><span style="flex:1"></span>
-    <button id="bGuideBack">&#9664; Back</button><button id="bGuideNext" class="on">Next &#9654;</button>
-    <button id="bGuideExit">Exit guide</button>
-  </div>
-  <div class="row" id="guideTextRow"><span id="guideText"></span></div>
   <div class="row hint" id="hintRow">
     <span id="instr"></span>
   </div>
@@ -117,11 +196,30 @@
   </div>
 </div>
 
+<section id="guide" aria-live="polite">
+  <button id="bGuideExit" aria-label="Close the guide">&times;</button>
+  <div id="gArt"></div>
+  <div id="gBody">
+    <div class="g-eyebrow"><span id="gStep"></span><span class="g-dots" id="gDots"></span></div>
+    <h2 id="gTitle"></h2>
+    <p id="gText"></p>
+    <p id="gFoot"></p>
+    <p id="gTap"><span class="g-tap"></span>Tap the picture to hide this card</p>
+    <div class="g-angle" id="gAngle"><span class="lbl">Angle</span>
+      <button id="bGAngleDown" aria-label="Smaller angle">&#8249;</button><span id="gAngleVal"></span>
+      <button id="bGAngleUp" aria-label="Larger angle">&#8250;</button></div>
+    <div id="gLive"><span id="gLiveVal"></span><span id="gLiveHint"></span></div>
+    <p id="gWarn"></p>
+    <div class="g-actions"><button class="ghost" id="bGuideBack">Back</button><button class="primary" id="bGuideNext">Continue</button></div>
+  </div>
+</section>
+<button id="guideChip"></button>
+
 <div class="sheet" id="menu">
   <button class="close" id="bMenuClose">Close</button>
   <h2>DuoVision</h2>
   <div class="hint">Fold the phone to the angle printed on each image, hold it about 30&nbsp;cm away, eyes level with the middle of the hinge and centred on it. New here? The setup guide walks you through it.</div>
-  <p><button id="bGuide" class="on">&#9654; Setup guide (4 steps)</button></p>
+  <p><button id="bGuide" class="on">Setup guide &nbsp;&middot;&nbsp; four steps</button></p>
   <div id="groups"></div>
   <div class="group"><h3>Tools</h3>
     <div class="pills"><button id="bPixTest">Pixel test (1:1 check)</button><button id="bDiag2">Diagnostics</button></div>
@@ -298,6 +396,8 @@
       t.textContent = mm + " The picture cannot line up with the hinge until it matches the display (see Info).";
       w.classList.add("on");
     } else w.classList.remove("on");
+    $("gWarn").textContent = w.classList.contains("on") ? t.textContent : "";
+    $("gWarn").classList.toggle("on", w.classList.contains("on"));
   }
 
   // ------------------------------------------------- iPhone Duo panel layout
@@ -368,7 +468,7 @@
   }
 
   function layout() {
-    updateFullscreenUi();
+    updateFullscreenUi(); placeGuide();
     if (!img.naturalWidth) return;
     var r = dpr(), nw = img.naturalWidth, nh = img.naturalHeight, v = viewportDevPx();
     var w, h, left, top, pl = panelLayout(), mask = $("mask");
@@ -438,10 +538,11 @@
     title.firstChild.nodeValue = g.title + " · " + hinge + "° ";
     title.lastChild.textContent = it.style === "align" ? "alignment card" : (STYLE_NAME[it.style] || it.style);
     $("instr").textContent = it.style === "fold"
-      ? "Fold the phone like a book until the picture looks flat: straight frame, square checks, round face. Tall in the middle: fold more. Pinched in the middle: open up."
+      ? "Fold the phone like a book until the picture runs true: straight lines and a perfect circle. Taller in the middle: fold further. Pinched: open slightly."
       : it.style === "align"
       ? "Fold the phone to " + hinge + "°. Move until all lines run straight across the hinge and both halves look equally wide."
       : "Fold to " + hinge + "°, eyes ~30 cm, centred. Cross your eyes until the two top dots become three, then look down.";
+    document.body.classList.toggle("aligning", it.style === "align");   // hinge fine-tuning belongs to the Align card
     updateGuideUi(it);
     var hs = hingesOf(g), k = hs.indexOf(hinge);
     $("bPrev").disabled = k <= 0; $("bNext").disabled = k >= hs.length - 1;
@@ -472,51 +573,129 @@
     hinge = hs[k]; show();
   }
   // ---------------------------------------------------------- setup guide
-  // Four steps: unfold -> fold until the fold-guide picture looks flat -> centre on the
-  // alignment card -> fuse the dots on a 3D picture. Each step shows the matching card at
-  // the chosen angle; the text lives in the bottom bar, so a tap hides it to see the picture.
-  var guide = null;   // { step: 1..4 } while the guide runs
+  // Four steps: open -> fold until the fold-guide picture runs true -> centre on the alignment
+  // card -> fuse the dots on a 3D picture. Each step shows the matching card at the chosen angle
+  // and a glass card on the left half with an animated drawing of the gesture. A tap on the
+  // picture hides the card; swiping the card (or Continue / Back) changes step.
+  var guide = null;        // { step: 1..4 } while the guide runs
+  var liveHinge = null;    // fold angle in degrees reported by a native wrapper (see setLiveHinge)
+  var ART = {
+    open: '<svg class="art" viewBox="0 0 200 104"><rect class="pane paneL" x="50" y="18" width="50" height="68" rx="7"/>' +
+      '<rect class="pane paneR" x="100" y="18" width="50" height="68" rx="7"/><line class="gold dash" x1="100" y1="12" x2="100" y2="92"/></svg>',
+    fold: '<svg class="art swing" viewBox="0 0 200 104"><line class="arm armL" x1="100" y1="26" x2="34" y2="26"/>' +
+      '<line class="arm armR" x1="100" y1="26" x2="166" y2="26"/><circle class="fillgold" cx="100" cy="26" r="2.4"/>' +
+      '<path class="gold arc" id="gArc" d=""/><text class="arc" id="gArcText" x="100" y="72"></text>' +
+      '<path class="dim" d="M88 96 Q100 87 112 96 Q100 105 88 96 Z"/><circle class="fillfg" cx="100" cy="96" r="2"/></svg>',
+    centre: '<svg class="art" viewBox="0 0 200 104"><line class="arm armL" x1="100" y1="26" x2="34" y2="26"/>' +
+      '<line class="arm armR" x1="100" y1="26" x2="166" y2="26"/><line class="gold dash" x1="100" y1="26" x2="100" y2="100"/>' +
+      '<g class="head"><circle cx="100" cy="88" r="9"/><circle class="fillfg" cx="96.4" cy="85.5" r="1.3"/><circle class="fillfg" cx="103.6" cy="85.5" r="1.3"/></g>' +
+      '<circle class="gold ok" cx="100" cy="88" r="13.5"/></svg>',
+    look: '<svg class="art" viewBox="0 0 200 104"><circle class="fillfg dOut" cx="78" cy="36" r="4.6"/><circle class="fillfg dOut r" cx="122" cy="36" r="4.6"/>' +
+      '<circle class="fillgold dIn" cx="78" cy="36" r="4.6"/><circle class="fillgold dIn r" cx="122" cy="36" r="4.6"/>' +
+      '<path class="gold down" d="M92 66 L100 74 L108 66"/><path class="dim down" d="M92 78 L100 86 L108 78"/></svg>'
+  };
   var GUIDE_STEPS = [
-    { kind: "fold", title: "Unfold", text: function () {
-        return window.innerWidth > window.innerHeight
-          ? "Open the phone flat and hold it sideways, with the hinge running up and down. The picture looks stretched for now: that is intended. Pick an angle above (" + hinge + "\u00b0 is selected), then tap Next."
-          : "Turn the phone sideways (landscape), opened flat, with the hinge running up and down."; } },
-    { kind: "fold", title: "Fold", text: function () {
-        return "Slowly fold the phone like a book, both sides towards you, until the picture looks flat: straight frame, square checks, round face. " +
-          "Tall in the middle: fold more. Pinched in the middle: open up. Tap the picture to hide this bar and look."; } },
-    { kind: "align", title: "Centre", text: function (cm) {
-        return "Keep that fold. Hold the phone about " + cm + " cm away, your nose in line with the hinge and your eyes level with the blue line across the middle. " +
-          "Both halves should look equally wide and every line straight."; } },
-    { kind: "scene", title: "See it in 3D", text: function () {
-        return "Cross your eyes slightly until the two white dots at the top become three. Keep the middle dot steady, then look down: the 3D shape appears after a few seconds. " +
-          "Tap the picture to hide this bar."; } }
+    { kind: "fold", art: "open", title: "Open", angle: true, next: "Continue",
+      text: function () { return window.innerWidth > window.innerHeight
+        ? "Open your phone flat, like a book, and choose a viewing angle."
+        : "Turn the phone so that the hinge runs from top to bottom."; },
+      foot: function () { return "120\u00b0 suits most people."; } },
+    { kind: "fold", art: "fold", title: "Fold", angle: true, next: "Continue", tap: true,
+      text: function () { return "Bring both sides toward you until the picture runs true: straight lines and a perfect circle."; },
+      foot: function () { return "Taller in the middle: fold further. Pinched: open slightly."; } },
+    { kind: "align", art: "centre", title: "Centre", next: "Continue", tap: true,
+      text: function (cm) { return "Hold the phone about " + cm + " cm away, your nose in line with the hinge and your eyes level with the centre line."; },
+      foot: function () { return "Both halves should look equally wide."; } },
+    { kind: "scene", art: "look", title: "Look", next: "Begin", tap: true,
+      text: function () { return "Cross your eyes gently until the two dots at the top become three. Hold the middle one, then let your gaze drift down."; },
+      foot: function () { return "The shape appears after a few seconds."; } }
   ];
   function groupKind(g) { return g.kind && g.kind !== "stereogram" ? g.kind : (GUIDE_KINDS.indexOf(g.id) >= 0 ? g.id : "scene"); }
   function groupIndexByKind(kind) { for (var k = 0; k < groups.length; k++) if (groupKind(groups[k]) === kind) return k; return -1; }
   function hasGuide() { return groupIndexByKind("fold") >= 0; }
+  function showGuideCard(on) { document.body.classList.toggle("g-hidden", !on); }
   function guideGo(step) {
+    var prev = guide ? guide.step : 0;
     guide = { step: Math.max(1, Math.min(GUIDE_STEPS.length, step)) };
-    var k = groupIndexByKind(GUIDE_STEPS[guide.step - 1].kind);
+    var st = GUIDE_STEPS[guide.step - 1], k = groupIndexByKind(st.kind);
     if (k >= 0) { gi = k; hinge = nearestHinge(groups[gi], hinge); }
-    if (guide.step === GUIDE_STEPS.length && STYLE_ORDER.indexOf(wantStyle) < 2) wantStyle = "color";
+    if (st.kind === "scene" && GUIDE_KINDS.indexOf(wantStyle) >= 0) wantStyle = "color";
     closeSheets(); setPixTest(false);
-    document.body.classList.add("guiding"); toggleOverlay(true); show();
-  }
-  function endGuide(hideBar) {
-    guide = null; document.body.classList.remove("guiding");
-    try { localStorage.setItem("duovision.guideDone", "1"); } catch (e) {}
-    if (hideBar) toggleOverlay(false);
+    document.body.classList.add("guiding"); showGuideCard(true);
+    if (prev !== guide.step) {                       // new drawing, and the card's contents slide in
+      $("gArt").innerHTML = ART[st.art];
+      var body = $("gBody"); body.classList.remove("g-swap", "back"); void body.offsetWidth;
+      body.classList.add("g-swap"); if (guide.step < prev) body.classList.add("back");
+    }
     show();
+  }
+  function endGuide(done) {
+    guide = null; document.body.classList.remove("guiding", "g-hidden");
+    try { localStorage.setItem("duovision.guideDone", "1"); } catch (e) {}
+    toggleOverlay(!done);
+    show();
+  }
+  function foldArc(deg) {                            // arc between the two arms, centred on the hinge of the drawing
+    var a = (180 - deg) / 2 * Math.PI / 180, r = 22, cx = 100, cy = 26;
+    return "M" + (cx - r * Math.cos(a)).toFixed(1) + " " + (cy + r * Math.sin(a)).toFixed(1) + " A" + r + " " + r + " 0 0 0 " +
+      (cx + r * Math.cos(a)).toFixed(1) + " " + (cy + r * Math.sin(a)).toFixed(1);
   }
   function updateGuideUi(it) {
     if (!guide) return;
-    var st = GUIDE_STEPS[guide.step - 1], e = entryFor(it.file);
+    var n = GUIDE_STEPS.length, st = GUIDE_STEPS[guide.step - 1], e = entryFor(it.file);
     var cm = Math.round(((e && e.params && e.params.distance) || 300) / 10);
-    $("guideStep").textContent = "Step " + guide.step + " of " + GUIDE_STEPS.length;
-    $("guideTitle").textContent = st.title;
-    $("guideText").textContent = st.text(cm);
-    $("bGuideBack").disabled = guide.step === 1;
-    $("bGuideNext").innerHTML = guide.step === GUIDE_STEPS.length ? "Done &#10003;" : "Next &#9654;";
+    $("gStep").textContent = "Step " + guide.step + " of " + n;
+    var dots = ""; for (var k = 1; k <= n; k++) dots += '<i' + (k <= guide.step ? ' class="on"' : "") + "></i>";
+    $("gDots").innerHTML = dots;
+    $("gTitle").textContent = st.title;
+    $("gText").textContent = st.text(cm);
+    $("gFoot").textContent = st.foot();
+    $("gTap").classList.toggle("on", !!st.tap);
+    $("gAngle").classList.toggle("on", !!st.angle);
+    $("gAngleVal").textContent = hinge + "\u00b0";
+    var hs = hingesOf(groups[gi]), hk = hs.indexOf(hinge);
+    $("bGAngleDown").disabled = hk <= 0; $("bGAngleUp").disabled = hk >= hs.length - 1;
+    $("bGuideBack").style.visibility = guide.step === 1 ? "hidden" : "visible";
+    $("bGuideNext").textContent = st.next;
+    $("guideChip").textContent = "Guide \u00b7 " + guide.step + " of " + n;
+    updateGuideArt();
+  }
+  function updateGuideArt() {                        // fold drawing follows the chosen angle, or the live hinge
+    if (!guide) return;
+    var st = GUIDE_STEPS[guide.step - 1], svg = $("gArt").firstChild, live = $("gLive");
+    var isLive = st.art === "fold" && typeof liveHinge === "number";
+    if (svg) {
+      var shown = isLive ? liveHinge : hinge;
+      svg.style.setProperty("--fold", ((180 - shown) / 2).toFixed(1) + "deg");
+      svg.classList.toggle("live", isLive);
+      var arc = $("gArc"); if (arc) { arc.setAttribute("d", foldArc(shown)); $("gArcText").textContent = Math.round(shown) + "\u00b0"; }
+    }
+    live.classList.toggle("on", isLive);
+    if (isLive) {
+      var d = liveHinge - hinge, match = Math.abs(d) <= 1.5;
+      live.classList.toggle("match", match);
+      $("gLiveVal").textContent = Math.round(liveHinge) + "\u00b0";
+      $("gLiveHint").textContent = match ? "Perfect. Hold it there." : (d > 0 ? "Fold " : "Open ") + Math.round(Math.abs(d)) + "\u00b0 " + (d > 0 ? "further" : "more");
+    }
+  }
+  // A native wrapper can report the hinge angle (iOS 27.1: UIHinge / onHingeChange), either by
+  // calling window.duovisionSetHingeAngle(degrees) or by dispatching a "duovision-hinge" event
+  // with detail.degrees (180 = flat). Web pages cannot read it themselves.
+  function setLiveHinge(deg) {
+    deg = Number(deg);
+    liveHinge = isFinite(deg) && deg >= 0 && deg <= 360 ? deg : null;
+    updateGuideArt();
+  }
+  window.duovisionSetHingeAngle = setLiveHinge;
+  window.addEventListener("duovision-hinge", function (ev) { setLiveHinge(ev.detail && ev.detail.degrees); });
+  function placeGuide() {                            // keep the card on the visible left half, clear of the hinge
+    var g = $("guide"), iw = window.innerWidth, pl = panelLayout(), left = 16, width = Math.min(400, iw - 32);
+    if (iw > window.innerHeight) {
+      var hx = pl ? pl.hinge : iw / 2, edge = pl && prefs.mask && pl.side === "right" ? Math.max(0, 2 * pl.hinge - iw) : 0;
+      var w = hx - edge - 28;
+      if (w >= 280) { left = edge + 14; width = Math.min(400, w); }
+    }
+    g.style.left = left + "px"; g.style.width = width + "px"; $("guideChip").style.left = left + "px";
   }
 
   function stepGroup(d) {
@@ -545,7 +724,7 @@
         var b = document.createElement("button");
         var st = stylesAt(g, x).filter(function (s) { return s !== "color" && GUIDE_KINDS.indexOf(s) < 0; });
         b.textContent = x + "°" + (st.length ? " +" : "");
-        b.onclick = function () { guide = null; document.body.classList.remove("guiding"); gi = k; hinge = x; closeSheets(); setPixTest(false); show(); };
+        b.onclick = function () { guide = null; document.body.classList.remove("guiding", "g-hidden"); gi = k; hinge = x; closeSheets(); setPixTest(false); show(); };
         p.appendChild(b);
       });
       d.appendChild(p); root.appendChild(d);
@@ -639,7 +818,11 @@
     if (pixTest) { setPixTest(false); show(); return; }
     var ax = Math.abs(dx), ay = Math.abs(dy);
     if (Math.max(ax, ay) < 12) {                                              // tap (long-press -> save menu)
-      if (dt < 450) { if (wantsAutoFullscreen()) enterFullscreen(); else toggleOverlay(); }
+      if (dt < 450) {
+        if (wantsAutoFullscreen()) enterFullscreen();
+        else if (guide) showGuideCard(document.body.classList.contains("g-hidden"));
+        else toggleOverlay();
+      }
       return;
     }
     if (ax > 50 && ax > 1.5 * ay) stepHinge(dx < 0 ? 1 : -1);               // swipe left = larger angle
@@ -647,8 +830,12 @@
   });
   document.addEventListener("keydown", function (ev) {
     var k = ev.key;
-    if (k === "Escape") { if (document.querySelector(".sheet.open")) closeSheets(); else toggleOverlay(false); return; }
+    if (k === "Escape") { if (document.querySelector(".sheet.open")) closeSheets(); else if (guide) showGuideCard(false); else toggleOverlay(false); return; }
     if ($("menu").classList.contains("open") || $("fsHelp").classList.contains("open")) return;
+    if (guide && (k === "Enter" || k === " " || k === "Backspace")) {
+      if (k === "Backspace") { if (guide.step > 1) guideGo(guide.step - 1); } else guideNext();
+      ev.preventDefault(); return;
+    }
     if (k === "ArrowRight") stepHinge(1);
     else if (k === "ArrowLeft") stepHinge(-1);
     else if (k === "ArrowDown") stepGroup(1);
@@ -672,9 +859,24 @@
   $("bFit").onclick = function () { fitMode = !fitMode; layout(); show(); };
   $("bFull").onclick = toggleFullscreen;
   $("bGuide").onclick = function () { guideGo(1); };
-  $("bGuideBack").onclick = function () { guideGo(guide.step - 1); };
-  $("bGuideNext").onclick = function () { if (guide.step >= GUIDE_STEPS.length) endGuide(true); else guideGo(guide.step + 1); };
+  function guideNext() { if (guide.step >= GUIDE_STEPS.length) endGuide(true); else guideGo(guide.step + 1); }
+  $("bGuideBack").onclick = function () { if (guide && guide.step > 1) guideGo(guide.step - 1); };
+  $("bGuideNext").onclick = function () { if (guide) guideNext(); };
   $("bGuideExit").onclick = function () { endGuide(false); };
+  $("bGAngleDown").onclick = function () { stepHinge(-1); };
+  $("bGAngleUp").onclick = function () { stepHinge(1); };
+  $("guideChip").onclick = function () { showGuideCard(true); };
+  (function () {                                     // swipe the card: left = next step, right = back
+    var g = $("guide"), s0 = null;
+    g.addEventListener("pointerdown", function (ev) { s0 = { x: ev.clientX, y: ev.clientY, id: ev.pointerId }; });
+    g.addEventListener("pointercancel", function () { s0 = null; });
+    g.addEventListener("pointerup", function (ev) {
+      if (!s0 || ev.pointerId !== s0.id || !guide) return;
+      var dx = ev.clientX - s0.x, dy = ev.clientY - s0.y; s0 = null;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < 1.5 * Math.abs(dy)) return;
+      if (dx < 0) guideNext(); else if (guide.step > 1) guideGo(guide.step - 1);
+    });
+  })();
   $("bNudgeL").onclick = function () { nudge(-0.5); };
   $("bNudgeR").onclick = function () { nudge(0.5); };
   $("bNudge0").onclick = function () { nudge(null); };

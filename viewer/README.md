@@ -77,7 +77,7 @@ possible for any web page there. The viewer works alongside this:
   at the bottom or top, and mirror the strip (hide the
   same width on the other side so both eyes get a symmetric frame). Settings
   are remembered per orientation.
-- Check on the **Align** card: the blue vertical line should sit exactly on
+- Check on the **Align** card: the gold vertical line should sit exactly on
   the fold. Info shows the layout, scale and hinge position.
 - The browser resamples the picture by about 7%, so it is slightly soft. A
   native app is the only route to sharp 1:1 pixels across the full width.
@@ -91,15 +91,23 @@ checkerboard; any moire or blur means the browser is scaling.
 
 ## Use it
 
-- **Setup guide** (starts on the first visit; later from Menu -> Setup guide):
-  1. *Unfold*: phone flat, landscape, hinge upright; pick an angle.
-  2. *Fold*: fold like a book until the fold-guide picture looks flat (straight
-     frame, square checks, round face). Tall in the middle: fold more. Pinched
-     in the middle: open up.
+- **Setup guide** (starts on the first visit; later from Menu -> Setup guide). A
+  glass card on the left half shows each step with an animated drawing of the
+  gesture:
+  1. *Open*: phone flat like a book; choose a viewing angle.
+  2. *Fold*: bring both sides toward you until the fold-guide picture runs true
+     (straight lines, a perfect circle). Taller in the middle: fold further.
+     Pinched: open slightly.
   3. *Centre*: on the Align card, nose in line with the hinge, eyes level with
-     the blue line, both halves equally wide.
-  4. *See it in 3D*: cross your eyes until the two dots become three, look down.
-  The text sits in the bottom bar; tap the picture to hide it and look.
+     the gold centre line, both halves equally wide.
+  4. *Look*: cross your eyes until the two dots become three, then look down.
+  Tap the picture to hide the card (a small chip brings it back), swipe the
+  card left or right to change step, or use Continue / Back.
+- **Live fold angle (native wrapper only).** Web pages cannot read the hinge.
+  A native iOS 27.1 app hosting this page can pass the angle from
+  `UIHinge` / `onHingeChange` by calling `window.duovisionSetHingeAngle(deg)`
+  or dispatching a `duovision-hinge` event with `detail.degrees` (180 = flat).
+  The Fold step then shows the live angle and says how far to fold or open.
 - Or start with **Align** for the angle you want: fold until the grid lines run
   straight across the hinge, and move sideways until both halves look equally
   wide. Then open a scene at the same angle.

@@ -172,7 +172,7 @@ def _fold_edge_rows(image, geom_viewed, eye):
     from duovision import verify
 
     r = verify.render_eye_view(image, geom_viewed, eye, res=(1500, 1060))
-    white = (r["image"].min(axis=2) > 235)
+    white = (r["image"].min(axis=2) > 150)             # the bright outer frame (the inner rules are dimmer)
     f = r["focal_px"]
     hx = r["cx"] + f * (-eye[0] / eye[2])                # retinal column of the hinge (x = 0, z = 0)
     out = {}
@@ -192,35 +192,37 @@ def _kink_deg(edges):
 
 @pytest.mark.parametrize("hinge", [105, 120, 140])
 def test_fold_guide_shows_the_target_through_the_cyclopean_eye(hinge):
-    from scipy import ndimage
-
+    """Points of the picture (dial ring, frame, empty zones) appear at the display pixels
+    their cyclopean rays pass through."""
     geom = FoldGeometry(DEV, hinge)
     view = DEFAULT_VIEW
-    img = guides.fold_guide_image(geom, view)
-    assert img.shape == (DEV.height_px, DEV.width_px, 3) and img.dtype == np.uint8
+    img = guides.fold_guide_image(geom, view).astype(int)
+    assert img.shape == (DEV.height_px, DEV.width_px, 3)
     half_w, half_h = guides.fold_guide_extent(geom, view)
-    ppm = 6.0
-    target = guides.fold_guide_target(half_w, half_h, ppm, hinge).astype(int)
-    # Sample plane points whose neighbourhood in the target is one flat colour.
-    flat = (ndimage.maximum_filter(target, size=(9, 9, 1)) == ndimage.minimum_filter(target, size=(9, 9, 1))).all(axis=2)
-    rng = np.random.default_rng(1)
-    m = guides.FOLD_MARGIN_MM
+    lay = guides.fold_guide_layout(half_w, half_h)
     e = view.cyclopean_eye()
-    checked = set()
-    for _ in range(400):
-        x = rng.uniform(-half_w + 1, half_w - 1)
-        y = rng.uniform(-half_h + 1, half_h - 1)
-        col = int((x + half_w + m) * ppm)
-        row = int((half_h + m - y) * ppm)
-        if not flat[row, col]:
-            continue
+
+    def patch(x, y):                      # 3x3 display neighbourhood of plane point (x, y)
         i, j, ok = geom.project_from_eye(e, np.array([e[0] + x, e[1] + y, view.z_background]))
         assert bool(ok)
-        got = img[int(round(float(j))), int(round(float(i)))].astype(int)
-        assert np.abs(got - target[row, col]).max() <= 6, (x, y, got, target[row, col])
-        checked.add(tuple(target[row, col]))
-    # frame white, paper, checks and face were all hit
-    assert {guides.FOLD_FRAME, guides.FOLD_PAPER, guides.FOLD_CHECK, guides.FOLD_FACE} <= checked
+        i, j = int(round(float(i))), int(round(float(j)))
+        return img[j - 1:j + 2, i - 1:i + 2].reshape(-1, 3)
+
+    gold = np.array(guides.FOLD_GOLD)
+    r = lay["ring_r"]
+    for ang in np.radians(np.arange(7.5, 360, 15)):
+        on = patch(r * np.cos(ang), r * np.sin(ang))
+        best = on[np.argmax(on.sum(axis=1))]
+        assert best.sum() > 0.45 * gold.sum() and best[0] > best[2] + 15, (ang, best)      # the gold ring
+        gap = patch(0.5 * (lay["inner_r"] + lay["tick_r0_long"]) * np.cos(ang), 0.5 * (lay["inner_r"] + lay["tick_r0_long"]) * np.sin(ang))
+        assert gap.max() < 40, (ang, gap.max())                                              # nothing between dial and ticks
+    for x in np.linspace(-0.9, 0.9, 13) * half_w:
+        for sgn in (-1, 1):
+            assert patch(x, sgn * half_h).max() > 110                                        # the frame, top and bottom
+            assert patch(x, sgn * (half_h + 3.0)).max() < 40                                 # black outside it
+    for y in np.linspace(-0.9, 0.9, 9) * half_h:
+        for sgn in (-1, 1):
+            assert patch(sgn * half_w, y).max() > 110                                        # the frame's sides
 
 
 def test_fold_guide_is_straight_only_at_the_encoded_fold():
@@ -239,10 +241,10 @@ def test_fold_guide_is_straight_only_at_the_encoded_fold():
     assert abs(_kink_deg(_fold_edge_rows(img, FoldGeometry(DEV, 150), left)) - flatter) < 0.5
 
 
-def test_fold_guide_band_and_rows():
+def test_fold_guide_band_is_left_black():
     geom = FoldGeometry(DEV, 120)
     img = guides.fold_guide_image(geom, DEFAULT_VIEW)
     nb = guide_band_rows(DEV)
-    band = img[:nb]
-    assert (band[..., 0] == band[..., 1]).all() and band.max() <= guides.TEXT_LEVEL   # grey band, no dots
-    assert (img[nb:] == np.array(guides.FOLD_FACE)).all(axis=2).sum() > 200            # the face is there
+    assert (img[:nb] == np.array(guides.FOLD_BG)).all()          # no text, no dots: the viewer's guide explains it
+    below = img[nb:].astype(int)
+    assert ((below[..., 0] > 150) & (below[..., 0] > below[..., 2] + 40)).sum() > 100    # the gold ring is there

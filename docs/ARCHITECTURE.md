@@ -124,7 +124,8 @@ def guide_dot_pixels(geom, view) -> ((i_l, j_l), (i_r, j_r))   # fold-aware, fus
 def draw_guide_band(image, geom, view, label: str) -> image      # fills reserved rows: dots + small label
 def alignment_image(geom, view, label: str) -> uint8 (H, W, 3)   # frontal square+circle+cross projected from the cyclopean eye
 def fold_guide_extent(geom, view) -> (half_w, half_h)            # mm in the plane z = z_background, frame of the fold-guide picture
-def fold_guide_target(half_w, half_h, px_per_mm, hinge_deg) -> uint8 (h, w, 3)   # the undistorted picture (frame, checks, face, "FOLD 120°")
+def fold_guide_layout(half_w, half_h) -> dict                    # mm sizes of the picture's elements (frame, rules, dial ring, ticks)
+def fold_guide_target(half_w, half_h, px_per_mm, hinge_deg) -> uint8 (h, w, 3)   # the undistorted picture: double frame, parallel rules, dial with the angle
 def fold_guide_image(geom, view, label: str = "") -> uint8 (H, W, 3)             # that picture projected from the cyclopean eye
 ```
 `fold_guide_image` is the fold-angle guide: each display pixel shows the colour of the point of
@@ -139,7 +140,8 @@ Batch output: `{scene}_{hinge:03d}_{style}.png`, `fold_{hinge:03d}.png`, `align_
 `manifest.json` (entry/group kinds `fold`, `align`, `scene`; groups ordered fold, align, scenes).
 Viewer: static `viewer/index.html` that loads `manifest.json` and shows each image at
 exact device pixels, with a diagnostics readout (viewport, devicePixelRatio) and a four-step
-setup guide (unfold, fold on the fold-guide card, centre on the align card, fuse a scene).
+setup guide (open, fold on the fold-guide card, centre on the align card, look at a scene).
+A native wrapper may report the hinge angle with `window.duovisionSetHingeAngle(degrees)`.
 
 ## Verifier — `duovision/verify.py`, `baseline.py`
 

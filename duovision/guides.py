@@ -14,10 +14,10 @@ for one hinge angle and one fixed viewpoint.  These guides help them match it:
   line runs straight across the hinge; a wrong fold angle kinks the
   horizontal lines at the hinge, an off-centre head makes the halves look
   unequally wide.
-* ``fold_guide_image``: an anamorphic picture (frame, checkerboard bands,
-  round face, "FOLD / 120°") for finding the fold angle by eye.  The flat
-  picture is pre-distorted so that it only looks right (straight frame, square
-  checks, round face) from the design viewpoint when the phone is folded to
+* ``fold_guide_image``: an anamorphic picture (fine double frame, parallel
+  rules, a graduated dial with the angle) for finding the fold angle by eye.
+  The flat picture is pre-distorted so that it only looks right (straight
+  rules, a perfect circle) from the design viewpoint when the phone is folded to
   the encoded hinge angle: flatter than that it looks tall in the middle,
   folded further it looks pinched in the middle.
 
@@ -59,20 +59,14 @@ ALIGN_INSTRUCTIONS = (
     "Fold until the lines run straight across the hinge;",
     "centre until both halves look equally wide.",
 )
-FOLD_INSTRUCTIONS = (
-    "Fold until the picture looks flat: straight frame, round face.",
-    "Tall in the middle: fold more · pinched in the middle: open up.",
-)
 FOLD_SAFE_WIDTH_FRAC = 0.78      # iOS hides ~9% of the Duo's inner display behind its status strip on
                                  # one side (the viewer mirrors it on the other): keep the frame inside
 FOLD_MARGIN_MM = 6.0             # background kept around the picture frame in the target bitmap
 FOLD_TARGET_OVERSAMPLE = 1.5     # target bitmap pixels per display pixel
-FOLD_BG = (6, 6, 10)
-FOLD_FRAME = (255, 255, 255)
-FOLD_PAPER = (14, 22, 42)
-FOLD_CHECK = (36, 74, 150)
-FOLD_FACE = (255, 204, 64)
-FOLD_INK = (40, 30, 10)
+FOLD_BG = (5, 5, 7)              # near black
+FOLD_INK = (236, 231, 221)       # warm ivory
+FOLD_INK_DIM = (128, 124, 116)
+FOLD_GOLD = (205, 178, 122)      # champagne
 
 
 # --------------------------------------------------------------------- fonts
@@ -369,7 +363,7 @@ def alignment_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> n
     grid = 10.0
 
     img = np.zeros((h, w, 3), dtype=np.float64)
-    img[:] = (6.0, 6.0, 10.0)
+    img[:] = FOLD_BG                             # same palette as the fold guide: ivory and gold on black
 
     def over(cov, colour):
         a = _quantize(cov)[..., None]
@@ -379,11 +373,11 @@ def alignment_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> n
     fx = qx - np.round(qx / grid) * grid
     fy = qy - np.round(qy / grid) * grid
     cov = np.maximum(_line_cov(fx, g_x, hw_grid), _line_cov(fy, g_y, hw_grid))
-    over(cov, (70, 78, 100))
+    over(cov, (58, 56, 52))
 
     # Crosshair through the centre, across the whole display.
     cov = np.maximum(_line_cov(qx, g_x, hw_main), _line_cov(qy, g_y, hw_main))
-    over(cov, (90, 220, 255))
+    over(cov, FOLD_GOLD)
 
     # Inscribed circle.
     rho = np.hypot(qx, qy)
@@ -391,7 +385,7 @@ def alignment_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> n
         nx = np.where(rho > 0, qx / rho, 0.0)
         ny = np.where(rho > 0, qy / rho, 0.0)
     g_r = np.hypot(nx * dqx_di + ny * dqy_di, nx * dqx_dj + ny * dqy_dj)
-    over(_line_cov(rho - half, g_r, hw_main), (255, 170, 60))
+    over(_line_cov(rho - half, g_r, hw_main), (176, 171, 160))
 
     # Square: four segments with square-capped ends.
     def extent(f_along, g_along):
@@ -405,7 +399,7 @@ def alignment_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> n
     for s in (-1.0, 1.0):
         cov = np.maximum(cov, _line_cov(qy - s * half, g_y, hw_main) * ext_x)   # horizontal edges
         cov = np.maximum(cov, _line_cov(qx - s * half, g_x, hw_main) * ext_y)   # vertical edges
-    over(cov, (255, 255, 255))
+    over(cov, FOLD_INK)
 
     out = np.clip(np.round(img), 0, 255).astype(np.uint8)
 
@@ -436,6 +430,52 @@ def fold_guide_extent(geom: FoldGeometry, view: ViewProfile) -> Tuple[float, flo
     return float(half_w), float(half_h)
 
 
+def fold_guide_layout(half_w: float, half_h: float) -> dict:
+    """Geometry (mm in the reference plane) of the fold-guide picture's elements.
+
+    frame: outer rule at (+-half_w, +-half_h), stroke `frame_w`; inner rule inset by
+    `inner_inset`.  rules_y: heights of the parallel rules that run the full width
+    near the top and bottom.  ring_r: radius of the dial's ring, centred on the hinge
+    at eye level, with `ticks` graduations between tick_r0 (long: tick_r0_long) and
+    tick_r1, and a fine inner circle at inner_r.
+    """
+    frame_w = min(0.45, 0.02 * half_h)
+    inner_inset = min(1.6, 0.06 * half_h)
+    rule_gap = min(1.4, 0.05 * half_h)
+    rule_top = half_h - min(4.6, 0.14 * half_h)
+    rules = [rule_top - k * rule_gap for k in range(3)]
+    ring_r = min(0.80 * (rules[-1] - 0.05 * half_h), 0.62 * half_w)
+    return {
+        "frame_w": frame_w, "inner_inset": inner_inset, "inner_w": 0.45 * frame_w,
+        "rules_y": [y for y in rules] + [-y for y in rules], "rule_w": 0.45 * frame_w,
+        "ring_r": ring_r, "ring_w": 1.25 * frame_w, "inner_r": 0.66 * ring_r,
+        "ticks": 72, "tick_r1": ring_r - 0.045 * ring_r, "tick_r0": ring_r - 0.10 * ring_r,
+        "tick_r0_long": ring_r - 0.17 * ring_r, "tick_w": 0.45 * frame_w,
+    }
+
+
+def _card_font(size_px: int):
+    """Font for the fold-guide lettering: Pillow's bundled face, so the card looks the
+    same wherever it is rendered; falls back to the installed fonts on old Pillow."""
+    size_px = max(6, int(size_px))
+    try:
+        return ImageFont.load_default(size=size_px)
+    except TypeError:  # pragma: no cover - Pillow < 10.1
+        return _font(size_px)
+
+
+def _spaced_text(draw, cx: float, cy: float, text: str, font, tracking: float, fill) -> None:
+    """Draw `text` centred on (cx, cy) with `tracking` extra pixels between letters."""
+    widths = [font.getlength(ch) for ch in text]
+    total = sum(widths) + tracking * (len(text) - 1)
+    l, t, r, b = font.getbbox(text)
+    x = cx - total / 2.0
+    y = cy - (t + b) / 2.0
+    for ch, w in zip(text, widths):
+        draw.text((x, y), ch, fill=fill, font=font)
+        x += w + tracking
+
+
 def fold_guide_target(half_w: float, half_h: float, px_per_mm: float, hinge_deg: float) -> np.ndarray:
     """The undistorted fold-guide picture, (h, w, 3) uint8.
 
@@ -444,17 +484,18 @@ def fold_guide_target(half_w: float, half_h: float, px_per_mm: float, hinge_deg:
     (col, row) is centred at x = (col + 0.5) / px_per_mm - half_w - m,
     y = half_h + m - (row + 0.5) / px_per_mm.
 
-    White frame, two-row checkerboard bands along the top and bottom (a square
-    boundary on the hinge), a round face in a white ring on the hinge, "FOLD"
-    on the left and the angle on the right.  Straight edges crossing the hinge
-    far from eye level and a circle on the hinge are the shapes whose
-    distortion shows a wrong fold angle most clearly.
+    A fine double frame, three parallel rules across the full width at the top
+    and bottom, and a graduated dial on the hinge with the angle at its centre
+    (see fold_guide_layout).  Long straight rules crossing the hinge far from eye
+    level and a circle on the hinge are the shapes whose distortion shows a wrong
+    fold angle most clearly; everything is drawn as light hairlines on black.
     """
     m = FOLD_MARGIN_MM
-    ss = 2                                       # supersampling for anti-aliasing
+    ss = 3                                       # supersampling for anti-aliasing
     w = max(8, int(math.ceil((2 * half_w + 2 * m) * px_per_mm)))
     h = max(8, int(math.ceil((2 * half_h + 2 * m) * px_per_mm)))
     k = px_per_mm * ss
+    lay = fold_guide_layout(half_w, half_h)
     img = Image.new("RGB", (w * ss, h * ss), FOLD_BG)
     d = ImageDraw.Draw(img)
 
@@ -464,51 +505,72 @@ def fold_guide_target(half_w: float, half_h: float, px_per_mm: float, hinge_deg:
     def Y(y):
         return (half_h + m - y) * k
 
-    def rect(x0, y0, x1, y1, fill):              # mm, any corner order
-        d.rectangle([X(min(x0, x1)), Y(max(y0, y1)), X(max(x0, x1)) - 1, Y(min(y0, y1)) - 1], fill=fill)
+    def px(mm):                                   # stroke width in bitmap pixels (>= 1)
+        return max(1, int(round(mm * k)))
 
-    def disc(cx, cy, rx, ry, fill):
-        d.ellipse([X(cx - rx), Y(cy + ry), X(cx + rx), Y(cy - ry)], fill=fill)
+    def hline(y, x0, x1, width_mm, fill):
+        t = px(width_mm)
+        d.rectangle([X(x0), Y(y) - t / 2.0, X(x1), Y(y) + t / 2.0 - 1], fill=fill)
 
-    t = min(1.8, 0.08 * half_h)                  # frame thickness
-    rect(-half_w, -half_h, half_w, half_h, FOLD_FRAME)
-    rect(-half_w + t, -half_h + t, half_w - t, half_h - t, FOLD_PAPER)
+    def vline(x, y0, y1, width_mm, fill):
+        t = px(width_mm)
+        d.rectangle([X(x) - t / 2.0, Y(y1), X(x) + t / 2.0 - 1, Y(y0)], fill=fill)
 
-    # Checkerboard bands: two rows of squares, a boundary on the hinge (x = 0).
-    xi = half_w - t
-    n = max(1, int(round(xi / min(6.0, max(1.5, 0.14 * half_h)))))
-    q = xi / n                                   # a whole number of squares on each side of the hinge
-    for band_top in (half_h - t, -half_h + t + 2 * q):
-        for r in range(2):
-            y1 = band_top - r * q
-            for c in range(-n, n):
-                x0, x1 = max(c * q, -xi), min((c + 1) * q, xi)
-                if x1 <= x0:
-                    continue
-                rect(x0, y1 - q, x1, y1, FOLD_FRAME if (c + r) % 2 == 0 else FOLD_CHECK)
+    def box(hw, hh, width_mm, fill):
+        e = width_mm / 2.0                        # square corners
+        for sgn in (-1, 1):
+            hline(sgn * hh, -hw - e, hw + e, width_mm, fill)
+            vline(sgn * hw, -hh - e, hh + e, width_mm, fill)
 
-    # Round face in a white ring, centred on the hinge at eye level.
-    free = half_h - t - 2 * q                    # half height left between the bands
-    ring = 0.88 * free
-    face = ring - min(2.4, 0.12 * ring)
-    disc(0, 0, ring, ring, FOLD_FRAME)
-    disc(0, 0, ring - min(1.0, 0.05 * ring), ring - min(1.0, 0.05 * ring), FOLD_PAPER)
-    disc(0, 0, face, face, FOLD_FACE)
-    for sx in (-1, 1):
-        disc(sx * 0.36 * face, 0.26 * face, 0.10 * face, 0.16 * face, FOLD_INK)
-    sm = 0.60 * face
-    d.arc([X(-sm), Y(sm), X(sm), Y(-sm)], 25, 155, fill=FOLD_INK, width=max(1, int(round(0.09 * face * k))))
+    def circle(r, width_mm, fill):
+        d.ellipse([X(-r), Y(r), X(r), Y(-r)], outline=fill, width=px(width_mm))
 
-    # "FOLD" on the left half, the angle on the right half.
-    room = xi - ring - 0.12 * xi                 # width available on each side of the face
-    if room > 4.0:
-        words = ("FOLD", f"{hinge_deg:g}°")
-        font = _fit_font(words, int(round(0.62 * free * k)), room * k)
-        asc, desc = font.getmetrics()
-        for word, sx in zip(words, (-1, 1)):
-            tw = _text_width(word, font)
-            cx = sx * (ring + (xi - ring) / 2.0)
-            d.text((X(cx) - tw / 2.0, Y(0) - (asc + desc) / 2.0), word, fill=FOLD_FRAME, font=font)
+    # Double frame.
+    box(half_w, half_h, lay["frame_w"], FOLD_INK)
+    box(half_w - lay["inner_inset"], half_h - lay["inner_inset"], lay["inner_w"], FOLD_INK_DIM)
+
+    # Parallel rules across the full width, top and bottom; the middle one in gold.
+    xr = half_w - 2.2 * lay["inner_inset"]
+    for n, y in enumerate(lay["rules_y"]):
+        hline(y, -xr, xr, lay["rule_w"], FOLD_GOLD if n % 3 == 1 else FOLD_INK_DIM)
+
+    # Dial on the hinge: gold ring, graduations, fine inner circle.
+    circle(lay["ring_r"], lay["ring_w"], FOLD_GOLD)
+    circle(lay["inner_r"], lay["inner_w"], FOLD_INK_DIM)
+    for n in range(lay["ticks"]):
+        ang = 2.0 * math.pi * n / lay["ticks"]
+        major = n % (lay["ticks"] // 12) == 0
+        r0 = lay["tick_r0_long"] if major else lay["tick_r0"]
+        ca, sa = math.cos(ang), math.sin(ang)
+        d.line([X(r0 * ca), Y(r0 * sa), X(lay["tick_r1"] * ca), Y(lay["tick_r1"] * sa)],
+               fill=FOLD_INK if major else FOLD_INK_DIM, width=px(lay["tick_w"] * (1.6 if major else 1.0)))
+
+    # The angle at the centre, with fine captions above and below.
+    r_in = lay["inner_r"]
+    num = f"{hinge_deg:g}"
+    font = _card_font(int(round(0.62 * r_in * k)))
+    while font.size > 8 and font.getlength(num) > 1.25 * r_in * k:
+        font = _card_font(font.size - 2)
+    l, t, r, b = font.getbbox(num)
+    nx = X(0) - (l + r) / 2.0
+    ny = Y(0) - (t + b) / 2.0
+    d.text((nx, ny), num, fill=FOLD_INK, font=font)
+    deg_r = 0.11 * (b - t)                        # the degree sign: a small ring, top right of the digits
+    dx, dy = nx + r + 1.9 * deg_r, ny + t + 1.1 * deg_r
+    d.ellipse([dx - deg_r, dy - deg_r, dx + deg_r, dy + deg_r], outline=FOLD_INK,
+              width=max(1, int(round(0.34 * deg_r))))
+    cap = _card_font(int(round(0.105 * r_in * k)))
+    if cap.size >= 9:
+        _spaced_text(d, X(0), Y(0.60 * r_in), "FOLD", cap, 0.42 * cap.size, FOLD_GOLD)
+        _spaced_text(d, X(0), Y(-0.60 * r_in), "DEGREES", cap, 0.42 * cap.size, FOLD_INK_DIM)
+
+    # Small captions beside the dial.
+    side = half_w - lay["inner_inset"] - lay["ring_r"]
+    side_font = _card_font(int(round(min(0.045 * half_h, 0.11 * side) * k)))
+    if side_font.size >= 9 and side > 6.0:
+        cx = lay["ring_r"] + side / 2.0
+        _spaced_text(d, X(-cx), Y(0), "DUOVISION", side_font, 0.40 * side_font.size, FOLD_INK_DIM)
+        _spaced_text(d, X(cx), Y(0), "FOLD GUIDE", side_font, 0.40 * side_font.size, FOLD_INK_DIM)
 
     img = img.resize((w, h), Image.LANCZOS)
     return np.asarray(img, dtype=np.uint8)
@@ -522,7 +584,9 @@ def fold_guide_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> 
     its cyclopean ray passes through (bilinear), so from the design viewpoint at
     the encoded hinge angle the picture looks flat and undistorted.  Shown on a
     flatter display it looks tall in the middle (fold more); folded too far it
-    looks pinched in the middle (open up).  The band carries the instructions.
+    looks pinched in the middle (open up).  The card carries no instructions (the
+    viewer's setup guide does); the reserved band rows are left black.  `label`
+    is accepted for symmetry with alignment_image and is not drawn.
     """
     from scipy import ndimage
 
@@ -538,14 +602,7 @@ def fold_guide_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> 
     for c in range(3):
         ch = ndimage.map_coordinates(target[..., c].astype(np.float32), [rows, cols], order=1, mode="nearest")
         out[..., c] = np.clip(np.rint(ch), 0, 255).astype(np.uint8)
-
-    nb = guide_band_rows(dev)
-    dist_cm = view.distance_mm / 10.0
-    head = label or "DuoVision fold guide"
-    left_lines = [f"{head} · fold {geom.hinge_deg:g}°",
-                  f"eyes {dist_cm:g} cm, centred, level with hinge middle"]
-    band = _render_band(geom, view, left_lines, list(FOLD_INSTRUCTIONS), dots=False)
-    out[:nb] = band[..., None]
+    out[:guide_band_rows(dev)] = np.array(FOLD_BG, dtype=np.uint8)
     return out
 
 

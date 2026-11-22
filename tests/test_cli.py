@@ -234,6 +234,8 @@ def test_viewer_html_well_formed():
     # Setup guide: fold-guide card -> align card -> scene, driven by the manifest's group kinds.
     assert "GUIDE_STEPS" in p.script and "guideGo" in p.script and 'kind: "fold"' in p.script
     assert 'id="bGuideNext"' in html and "duovision.guideDone" in p.script
+    assert 'id="guide"' in html and "@keyframes gFoldR" in html and "prefers-reduced-motion" in html
+    assert "duovisionSetHingeAngle" in p.script and "duovision-hinge" in p.script   # native hinge-angle hook
     # Self-contained: no external scripts/styles.
     assert not any(u.startswith(("http:", "https:", "//")) for u in p.urls), p.urls
     assert "<script src" not in html
