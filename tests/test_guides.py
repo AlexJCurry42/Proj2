@@ -163,3 +163,88 @@ def test_alignment_lines_kink_unless_folded():
         hinge_c = DEV.width_px // 2
         diff = top_at(cols.min() + 4) - top_at(hinge_c)
         assert (diff > 3) == expect_kink
+
+
+# ----------------------------------------------------------------- fold guide
+def _fold_edge_rows(image, geom_viewed, eye):
+    """Rows (retinal px) of the picture frame's bottom edge at columns left and right of the hinge,
+    as seen from `eye` with the phone folded to geom_viewed."""
+    from duovision import verify
+
+    r = verify.render_eye_view(image, geom_viewed, eye, res=(1500, 1060))
+    white = (r["image"].min(axis=2) > 150)             # the bright outer frame (the inner rules are dimmer)
+    f = r["focal_px"]
+    hx = r["cx"] + f * (-eye[0] / eye[2])                # retinal column of the hinge (x = 0, z = 0)
+    out = {}
+    for name, (x0, x1) in (("left", (-0.16, -0.03)), ("right", (0.03, 0.16))):
+        cols = np.arange(int(round(hx + x0 * f)), int(round(hx + x1 * f)) + 1)
+        cols = cols[white[:, cols].any(axis=0)]          # an off-centre eye sees the picture shifted
+        rows = np.array([np.nonzero(white[:, c])[0].max() for c in cols], dtype=float)
+        out[name] = (cols.astype(float), rows)
+    return out
+
+
+def _kink_deg(edges):
+    import math
+    sl = [np.polyfit(*edges[k], 1)[0] for k in ("left", "right")]
+    return math.degrees(math.atan(sl[1]) - math.atan(sl[0]))
+
+
+@pytest.mark.parametrize("hinge", [105, 120, 140])
+def test_fold_guide_shows_the_target_through_the_cyclopean_eye(hinge):
+    """Points of the picture (dial ring, frame, empty zones) appear at the display pixels
+    their cyclopean rays pass through."""
+    geom = FoldGeometry(DEV, hinge)
+    view = DEFAULT_VIEW
+    img = guides.fold_guide_image(geom, view).astype(int)
+    assert img.shape == (DEV.height_px, DEV.width_px, 3)
+    half_w, half_h = guides.fold_guide_extent(geom, view)
+    lay = guides.fold_guide_layout(half_w, half_h)
+    e = view.cyclopean_eye()
+
+    def patch(x, y):                      # 3x3 display neighbourhood of plane point (x, y)
+        i, j, ok = geom.project_from_eye(e, np.array([e[0] + x, e[1] + y, view.z_background]))
+        assert bool(ok)
+        i, j = int(round(float(i))), int(round(float(j)))
+        return img[j - 1:j + 2, i - 1:i + 2].reshape(-1, 3)
+
+    accent = np.array(guides.FOLD_ACCENT)
+    r = lay["ring_r"]
+    for ang in np.radians(np.arange(7.5, 360, 15)):
+        on = patch(r * np.cos(ang), r * np.sin(ang))
+        best = on[np.argmax(on.sum(axis=1))]
+        assert best.sum() > 0.45 * accent.sum() and best[2] > best[0] + 15, (ang, best)    # the blue ring
+        gap = patch(0.5 * (lay["inner_r"] + lay["tick_r0_long"]) * np.cos(ang), 0.5 * (lay["inner_r"] + lay["tick_r0_long"]) * np.sin(ang))
+        assert gap.max() < 40, (ang, gap.max())                                              # nothing between dial and ticks
+    for x in np.linspace(-0.9, 0.9, 13) * half_w:
+        for sgn in (-1, 1):
+            assert patch(x, sgn * half_h).max() > 110                                        # the frame, top and bottom
+            assert patch(x, sgn * (half_h + 3.0)).max() < 40                                 # black outside it
+    for y in np.linspace(-0.9, 0.9, 9) * half_h:
+        for sgn in (-1, 1):
+            assert patch(sgn * half_w, y).max() > 110                                        # the frame's sides
+
+
+def test_fold_guide_is_straight_only_at_the_encoded_fold():
+    geom = FoldGeometry(DEV, 120)
+    view = DEFAULT_VIEW
+    img = guides.fold_guide_image(geom, view)
+    e = view.cyclopean_eye()
+    ok = _kink_deg(_fold_edge_rows(img, geom, e))
+    flatter = _kink_deg(_fold_edge_rows(img, FoldGeometry(DEV, 150), e))
+    deeper = _kink_deg(_fold_edge_rows(img, FoldGeometry(DEV, 95), e))
+    assert abs(ok) < 0.35                       # straight across the hinge
+    # Bottom edge: flatter -> the middle hangs lower (tall in the middle), deeper -> pinched.
+    assert flatter < -2.0 and deeper > 2.0
+    # Each eye sees the same bend as the cyclopean eye: the cue does not depend on which eye looks.
+    left, _right = view.eyes()
+    assert abs(_kink_deg(_fold_edge_rows(img, FoldGeometry(DEV, 150), left)) - flatter) < 0.5
+
+
+def test_fold_guide_band_is_left_black():
+    geom = FoldGeometry(DEV, 120)
+    img = guides.fold_guide_image(geom, DEFAULT_VIEW)
+    nb = guide_band_rows(DEV)
+    assert (img[:nb] == np.array(guides.FOLD_BG)).all()          # no text, no dots: the viewer's guide explains it
+    below = img[nb:].astype(int)
+    assert ((below[..., 2] > 150) & (below[..., 2] > below[..., 0] + 40)).sum() > 100    # the blue ring is there

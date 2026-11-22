@@ -66,20 +66,23 @@ on one side, and web apps get a window that stops at it: 867 x 669 of the
 and scales them to the 2670 x 1878 panel, so 1:1 physical pixels are not
 possible for any web page there. The viewer works alongside this:
 
-- In the home-screen app, in landscape, it scales the picture to the window
-  height, so its size in mm matches the panel, and anchors it at the window
-  edge away from the strip, so the hinge column sits on the physical fold
-  (CSS x 475.5 of 867, not the window centre).
-- **Hinge** controls in the top bar: nudge by 0.5 mm (`[`/`]` by 0.1 mm),
-  reset, choose which side the strip is on, and mirror the strip (hide the
+- iOS does not always give the web app the same window: 867 x 669 pt, or
+  867 x 587 pt with an extra 82 pt bar reserved at the bottom (or top). So the
+  viewer does not infer the panel from the window. In the home-screen app, in
+  landscape, it scales the picture to the fixed 951 x 669 pt panel (true size
+  in mm) and places it from where the window sits on the panel, so the hinge
+  column is on the physical fold (CSS x 475.5) whatever window iOS gives.
+- **Settings -> Hinge alignment**: Adjust the hinge position (0.5 and 0.1 mm
+  steps, reset), choose which side the strip is on, whether the extra bar (when
+  present) is at the bottom or top, and mirror the strip (hide the
   same width on the other side so both eyes get a symmetric frame). Settings
   are remembered per orientation.
 - Check on the **Align** card: the blue vertical line should sit exactly on
-  the fold. Info shows the layout, scale and hinge position.
+  the fold. Diagnostics shows the layout, scale and hinge position.
 - The browser resamples the picture by about 7%, so it is slightly soft. A
   native app is the only route to sharp 1:1 pixels across the full width.
 
-Check it in **Info** (Diagnostics): "viewport covers: YES" and "fits exactly:
+Check it in **Settings -> Diagnostics**: "viewport covers: YES" and "fits exactly:
 YES" mean one image pixel equals one display pixel across the whole screen. On
 the iPhone Duo inner display "fits exactly" reads "n/a" (iOS scales web pages
 there) and the "layout" and "hinge" lines describe the panel layout instead.
@@ -88,15 +91,46 @@ checkerboard; any moire or blur means the browser is scaling.
 
 ## Use it
 
-- Start with **Align** for the angle you want: fold until the grid lines run
-  straight across the hinge, and move sideways until both halves look equally
-  wide. Then open a scene at the same angle.
-- Tap: show/hide the bar (angle pills, style pills, prev/next, menu, info).
-- Swipe left/right: next/previous hinge angle in the scene; up/down: next scene.
-- Desktop keys: arrows (angle / scene), `s` style, `m` menu, `i` diagnostics,
-  `f` full screen on/off, `p` toggle 1:1 / fit preview (fit is scaled, so the
-  3D does not work; for previewing only).
-- Saving to Photos: long-press the picture -> "Save to Photos" (or "open the
-  image alone" in the bar, then long-press). Photos shows it full screen too,
-  but may zoom it to fill; Safari's 1:1 mode is the reference.
+- **Viewing.** Tap the picture to show or hide the bars. The top bar has the
+  Library (left) and Settings (right). The bottom dock steps through pictures
+  and angles and switches style (Colour, Mono, Texture). Swipe left or right
+  for the angle, up or down for the next picture.
+- **Library.** Pick a viewing angle, then a tile: *Fold guide* and *Align*
+  under Prepare, the 3D pictures below. The app reopens on the last picture.
+- **Settings** (a drawer on the right, so the hinge stays visible):
+  - *Appearance*: a **Dark mode** switch, on by default. Dark is black, light
+    is white, both with a blue accent; the choice is remembered (`t` on a
+    keyboard). In light mode the fold-guide and alignment cards are
+    shown as dark lines on white; the 3D pictures are never altered.
+  - *Picture*: viewing angle and style.
+  - *Display*: full screen, and True size or Fit (a scaled preview; the 3D
+    does not work in it).
+  - *Hinge alignment* (iPhone Duo): **Adjust** opens the alignment card with
+    large -0.5 / -0.1 / +0.1 / +0.5 mm buttons to move the blue line onto the
+    fold; plus the status strip side, the system bar position when iOS
+    reserves one, and the mirror switch.
+  - *Tools*: setup guide, save or open the picture, pixel test, diagnostics,
+    reset.
+- **Setup guide** (starts on the first visit; later from the Library or Settings). A
+  glass card on the left half shows each step with an animated drawing of the
+  gesture:
+  1. *Open*: phone flat like a book; choose a viewing angle.
+  2. *Fold*: bring both sides toward you until the fold-guide picture runs true
+     (straight lines, a perfect circle). Taller in the middle: fold further.
+     Pinched: open slightly.
+  3. *Centre*: on the Align card, nose in line with the hinge, eyes level with
+     the blue centre line, both halves equally wide.
+  4. *Look*: cross your eyes until the two dots become three, then look down.
+  Tap the picture to hide the card (a small chip brings it back), swipe the
+  card left or right to change step, or use Continue / Back.
+- **Live fold angle (native wrapper only).** Web pages cannot read the hinge.
+  A native iOS 27.1 app hosting this page can pass the angle from
+  `UIHinge` / `onHingeChange` by calling `window.duovisionSetHingeAngle(deg)`
+  or dispatching a `duovision-hinge` event with `detail.degrees` (180 = flat).
+  The Fold step then shows the live angle and says how far to fold or open.
+- Desktop keys: arrows (angle / picture), `s` style, `m` library, `,` settings,
+  `i` diagnostics, `f` full screen, `p` True size / Fit, `[` `]` hinge position
+  by 0.1 mm, Esc closes whatever is open.
+- Saving to Photos: long-press the picture -> "Save to Photos", or Settings ->
+  Save this picture -> Open, then long-press.
 - The URL hash (`#cube/120/color`) remembers the current image.

@@ -27,6 +27,8 @@ DEFAULT_SCENES = ("plaque", "cube", "sphere", "text", "torus", "pyramid", "heart
 BATCH_SWEEP_STYLE = "color"
 BATCH_EXTRA_STYLES = ("bw", "texture")
 META_PREFIX = "duovision."
+GUIDE_KINDS = ("fold", "align")       # guide cards (no scene/style); also their menu order
+GUIDE_TITLES = {"fold": "Fold guide", "align": "Align"}
 
 
 # ------------------------------------------------------------------ params
@@ -34,7 +36,7 @@ META_PREFIX = "duovision."
 class RenderParams:
     """Everything needed to reproduce one image (stored in the PNG)."""
 
-    kind: str = "stereogram"          # "stereogram" | "align"
+    kind: str = "stereogram"          # "stereogram" | "align" | "fold"
     scene: str = "cube"
     hinge: float = DEFAULT_HINGE_DEG
     style: str = "color"
@@ -64,7 +66,7 @@ class RenderParams:
 
     def to_meta(self) -> dict:
         d = asdict(self)
-        if self.kind == "align":
+        if self.kind in GUIDE_KINDS:
             for k in ("scene", "style", "texture", "bg_vee", "seed", "dot_px", "text"):
                 d.pop(k, None)
         elif self.style != "texture":
@@ -85,6 +87,10 @@ def stereogram_filename(scene: str, hinge: float, style: str) -> str:
 
 def align_filename(hinge: float) -> str:
     return f"align_{int(round(hinge)):03d}.png"
+
+
+def fold_filename(hinge: float) -> str:
+    return f"fold_{int(round(hinge)):03d}.png"
 
 
 # ---------------------------------------------------------------- rendering
@@ -130,8 +136,28 @@ def render_align(p: RenderParams) -> tuple[np.ndarray, dict]:
     return image, stats
 
 
+def render_fold(p: RenderParams) -> tuple[np.ndarray, dict]:
+    from .guides import fold_guide_extent, fold_guide_image
+
+    geom = p.geom()
+    view = p.view()
+    t0 = time.perf_counter()
+    image = fold_guide_image(geom, view, "DuoVision fold guide")
+    half_w, half_h = fold_guide_extent(geom, view)
+    stats = {
+        "frame_mm": [2 * half_w, 2 * half_h],
+        "plane_z_mm": float(view.z_background),
+        "time_render_s": time.perf_counter() - t0,
+    }
+    return image, stats
+
+
 def render(p: RenderParams) -> tuple[np.ndarray, dict]:
-    return render_align(p) if p.kind == "align" else render_stereogram(p)
+    if p.kind == "align":
+        return render_align(p)
+    if p.kind == "fold":
+        return render_fold(p)
+    return render_stereogram(p)
 
 
 # ----------------------------------------------------------------- PNG I/O
@@ -210,12 +236,12 @@ class Job:
 
 def batch_jobs(scenes: Iterable[str] | None = None, hinges: Iterable[float] | None = None, *,
                styles: Iterable[str] | None = None, extra_hinge: float = DEFAULT_HINGE_DEG,
-               base: RenderParams | None = None, align: bool = True) -> list[Job]:
+               base: RenderParams | None = None, align: bool = True, fold: bool = True) -> list[Job]:
     """The agreed first batch (optionally restricted).
 
     - every scene x every hinge in style 'color'
     - every scene at `extra_hinge` in styles 'bw' and 'texture' (marble)
-    - align_XXX.png for every hinge
+    - fold_XXX.png (fold-angle guide) and align_XXX.png for every hinge
     """
     base = base or RenderParams()
     scenes = list(scenes) if scenes else list(_scene_names())
@@ -229,6 +255,10 @@ def batch_jobs(scenes: Iterable[str] | None = None, hinges: Iterable[float] | No
             seen.add(job.file)
             jobs.append(job)
 
+    if fold:
+        for h in hinges:
+            p = RenderParams(**{**asdict(base), "kind": "fold", "hinge": h})
+            add(Job(fold_filename(h), p))
     if align:
         for h in hinges:
             p = RenderParams(**{**asdict(base), "kind": "align", "hinge": h})
@@ -267,7 +297,7 @@ def run_job(out_dir: str, job: Job, force: bool = False) -> dict:
             stats = {**stats, "png_mode": im.mode, "bytes": path.stat().st_size}
         return _entry(job.file, params or job.params.to_meta(), stats, w, h, skipped=True)
     image, stats = render(job.params)
-    palette = job.params.kind == "align" or job.params.style in ("bw", "color")
+    palette = job.params.kind in GUIDE_KINDS or job.params.style in ("bw", "color")
     info = save_png(path, image, job.params, stats, palette=palette)
     stats = {**stats, **info, "time_job_s": time.perf_counter() - t0}
     return _entry(job.file, job.params.to_meta(), _jsonable(stats), image.shape[1], image.shape[0], skipped=False)
@@ -278,9 +308,9 @@ def _entry(file, params, stats, w, h, skipped):
     return {
         "file": file,
         "kind": kind,
-        "scene": "align" if kind == "align" else params.get("scene"),
+        "scene": kind if kind in GUIDE_KINDS else params.get("scene"),
         "hinge": int(round(float(params.get("hinge", DEFAULT_HINGE_DEG)))),
-        "style": "align" if kind == "align" else params.get("style"),
+        "style": kind if kind in GUIDE_KINDS else params.get("style"),
         "width": int(w),
         "height": int(h),
         "params": _jsonable(params),
@@ -290,22 +320,22 @@ def _entry(file, params, stats, w, h, skipped):
 
 
 def build_groups(entries: list[dict]) -> list[dict]:
-    """Viewer menu: Align first, then one group per scene (SCENE_NAMES order)."""
+    """Viewer menu: Fold guide, Align, then one group per scene (SCENE_NAMES order)."""
     order = list(_scene_names())
     groups: dict[str, dict] = {}
     for e in entries:
         gid = e["scene"]
-        g = groups.setdefault(gid, {"id": gid, "title": "Align" if gid == "align" else gid.capitalize(),
-                                    "kind": "align" if gid == "align" else "scene",
+        g = groups.setdefault(gid, {"id": gid, "title": GUIDE_TITLES.get(gid, gid.capitalize()),
+                                    "kind": gid if gid in GUIDE_KINDS else "scene",
                                     "hinges": set(), "styles": set(), "items": []})
         g["hinges"].add(e["hinge"])
         g["styles"].add(e["style"])
         g["items"].append({"file": e["file"], "hinge": e["hinge"], "style": e["style"]})
-    style_order = {"color": 0, "bw": 1, "texture": 2, "align": 3}
+    style_order = {"color": 0, "bw": 1, "texture": 2, "align": 3, "fold": 4}
 
     def gkey(gid):
-        if gid == "align":
-            return (-1, "")
+        if gid in GUIDE_KINDS:
+            return (GUIDE_KINDS.index(gid) - len(GUIDE_KINDS), "")
         return (order.index(gid) if gid in order else len(order), gid)
 
     out = []
@@ -335,7 +365,8 @@ def write_manifest(out_dir, entries: list[dict], *, merge: bool = True) -> dict:
             continue  # keep the richer entry written when the file was rendered
         e = {k: v for k, v in e.items() if not k.startswith("_")}
         by_file[e["file"]] = e
-    ents = sorted(by_file.values(), key=lambda e: (e["kind"] != "align", e["scene"], e["hinge"], e["style"]))
+    ents = sorted(by_file.values(), key=lambda e: (GUIDE_KINDS.index(e["kind"]) if e["kind"] in GUIDE_KINDS
+                                                   else len(GUIDE_KINDS), e["scene"], e["hinge"], e["style"]))
     first = ents[0] if ents else {}
     manifest = {
         "format": "duovision-manifest",
