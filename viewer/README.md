@@ -12,6 +12,7 @@ covers the **whole** display; see *Full screen* below.
 
 ```sh
 python -m duovision batch --out out/batch      # PNGs + manifest.json + the viewer files
+python -m duovision batch --out out/batch --videos   # also 24 looping videos (needs ffmpeg; about 70 min on 4 cores)
 ```
 
 The batch command copies the viewer (`index.html`, `app.webmanifest`, icons) into the output folder, so
@@ -91,6 +92,12 @@ checkerboard; any moire or blur means the browser is scaling.
 
 ## Use it
 
+- **Moving pictures.** Where the site has a video for the scene and angle
+  (110, 120 and 130 degrees), the picture opens as a looping video and the style
+  control shows **Motion** first; Colour, Mono and Texture are the stills.
+  Other angles show the still. If the device is set to reduce motion, pictures
+  open as stills and Motion is one tap away. The setup guide teaches fusing on
+  the still and starts the motion when you press Begin.
 - **Viewing.** Tap the picture to show or hide the bars. The top bar has the
   Library (left) and Settings (right). The bottom dock steps through pictures
   and angles and switches style (Colour, Mono, Texture). Swipe left or right

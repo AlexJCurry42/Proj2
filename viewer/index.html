@@ -39,6 +39,7 @@
     image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;
     -webkit-touch-callout: default; /* long-press -> Save to Photos */ }
   #img.fit, #img.panel { image-rendering: auto; }
+  #vid { position: absolute; left: 0; top: 0; display: none; max-width: none; max-height: none; object-fit: fill; background: var(--stage); }
   #mask { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--stage); display: none; pointer-events: none; }
   #pixtest { position: absolute; left: 0; top: 0; display: none; image-rendering: pixelated; }
   button { font: inherit; font-weight: 500; letter-spacing: 0.01em; color: var(--fg); background: rgba(var(--ink), 0.06);
@@ -232,6 +233,7 @@
 <body>
 <div id="stage">
   <img id="img" alt="" draggable="false">
+  <video id="vid" playsinline webkit-playsinline loop muted preload="auto" disablepictureinpicture></video>
   <div id="mask"></div>
   <canvas id="pixtest"></canvas>
 </div>
@@ -325,7 +327,7 @@
     <button class="switch" id="bMask" role="switch" aria-checked="true" aria-label="Mirror the strip"></button></div>
   <h3>Tools</h3>
   <div class="set-row" id="setGuideRow"><span class="name">Setup guide<small>Four steps, about a minute</small></span><button id="bGuide2">Start</button></div>
-  <div class="set-row"><span class="name">Save this picture<small>Long-press it, or open it on its own</small></span>
+  <div class="set-row"><span class="name">Save this picture<small>Long-press a still, or open the file on its own</small></span>
     <a class="btn" id="openLink" href="#" target="_blank" rel="noopener">Open</a></div>
   <div class="set-row"><span class="name">Pixel test<small>Checks that the browser is not scaling</small></span><button id="bPixTest">Run</button></div>
   <div class="set-row"><span class="name">Diagnostics<small>How the page maps to the display</small></span><button id="bDiag">Open</button></div>
@@ -367,13 +369,23 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var img = $("img"), stage = $("stage"), msg = $("msg");
-  var STYLE_ORDER = ["fold", "align", "color", "bw", "texture"];
-  var STYLE_NAME = { fold: "fold guide", align: "align", color: "colour dots", bw: "black & white", texture: "texture" };
-  var STYLE_LABEL = { color: "Colour", bw: "Mono", texture: "Texture" };   // short names for the segmented controls
+  var STYLE_ORDER = ["fold", "align", "motion", "color", "bw", "texture"];
+  var STYLE_NAME = { fold: "fold guide", align: "align", motion: "moving", color: "colour dots", bw: "black & white", texture: "texture" };
+  var STYLE_LABEL = { motion: "Motion", color: "Colour", bw: "Mono", texture: "Texture" };   // short names for the segmented controls
   var GUIDE_KINDS = ["fold", "align"];   // guide cards: their own menu groups, in this order, before the scenes
   var GUIDE_TITLE = { fold: "Fold guide", align: "Align" };
 
-  var manifest = null, groups = [], gi = 0, hinge = null, wantStyle = "color", fitMode = false, pixTest = false;
+  // "motion" is a looping video of the scene (where the batch rendered one). It is the default,
+  // except for people who ask their device for reduced motion: they get the still.
+  var reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+  function defaultStyle() { return reduceMotion ? "color" : "motion"; }
+  var manifest = null, groups = [], gi = 0, hinge = null, wantStyle = defaultStyle(), fitMode = false, pixTest = false;
+  var vid = $("vid"), media = { video: false, w: 0, h: 0 };
+  function isVideoFile(f) { return /\.mp4$/i.test(f || ""); }
+  // Size the layout works in, in image pixels: a still's own size; for a video the size of the stills
+  // (videos are encoded smaller and scaled up to the same place on the display).
+  function mediaW() { return media.video ? media.w : img.naturalWidth; }
+  function mediaH() { return media.video ? media.h : img.naturalHeight; }
   var manifestUrl = new URLSearchParams(location.search).get("manifest") || "manifest.json";
   var baseUrl = manifestUrl.replace(/[^\/]*$/, "");
   var cache = {};
@@ -469,7 +481,7 @@
   }
   // Does the picture match the display it is shown on? Returns null if it does.
   function displayMismatch() {
-    var nw = img.naturalWidth, nh = img.naturalHeight, v = viewportDevPx();
+    var nw = mediaW(), nh = mediaH(), v = viewportDevPx();
     if (!nw || (nw === v[0] && nh === v[1]) || panelLayout()) return null;
     if (nw === v[1] && nh === v[0])
       return "Rotate the phone to " + (nw > nh ? "landscape" : "portrait") + " (hinge " + (nw > nh ? "vertical" : "horizontal") + ").";
@@ -559,7 +571,7 @@
   function ppi() { var d = manifest && manifest.device; return (d && d.ppi) || 430; }
   var DUO_PANEL_PT = [951, 669];   // iPhone Duo inner display, landscape, CSS px (pt)
   function panelLayout() {   // null unless this is the iPhone Duo inner display, landscape, home-screen app
-    var nw = img.naturalWidth, nh = img.naturalHeight, iw = window.innerWidth, ih = window.innerHeight;
+    var nw = mediaW(), nh = mediaH(), iw = window.innerWidth, ih = window.innerHeight;
     if (!nw || fitMode || iw <= ih || nw <= nh) return null;
     // Only the iPhone Duo inner display: an iOS home-screen app (navigator.standalone) whose window is
     // larger than screen.*, which on the Duo describes the outer display (466 x 678 pt). This keeps
@@ -619,8 +631,8 @@
 
   function layout() {
     updateFullscreenUi(); placeGuide();
-    if (!img.naturalWidth) return;
-    var r = dpr(), nw = img.naturalWidth, nh = img.naturalHeight, v = viewportDevPx();
+    if (!mediaW()) return;
+    var r = dpr(), nw = mediaW(), nh = mediaH(), v = viewportDevPx();
     var w, h, left, top, pl = panelLayout(), mask = $("mask");
     document.body.classList.toggle("panelmode", !!pl);
     img.classList.toggle("panel", !!pl);
@@ -647,8 +659,9 @@
       left = Math.round((v[0] - nw) / 2) / r; top = Math.round((v[1] - nh) / 2) / r;
       img.classList.remove("fit");
     }
-    img.style.width = w + "px"; img.style.height = h + "px";
-    img.style.left = left + "px"; img.style.top = top + "px";
+    [img, vid].forEach(function (el) {                 // the still and the video share one box
+      el.style.width = w + "px"; el.style.height = h + "px"; el.style.left = left + "px"; el.style.top = top + "px";
+    });
     updateSettingsUi();
   }
   function preload(file) {
@@ -660,6 +673,8 @@
     var it = current();
     if (!it) { msg.textContent = "No image for this selection."; msg.style.display = "block"; return; }
     var url = baseUrl + it.file, token = ++showToken;
+    if (isVideoFile(it.file)) { showVideo(it, url); finishShow(it, url); return; }
+    if (media.video) stopVideo();
     var pre = preload(it.file);
     var swap = function () {
       if (token !== showToken) return;
@@ -667,6 +682,28 @@
       img.src = url;   // old picture stays until the new one is decoded: no black flash
     };
     if (pre.decode) pre.decode().then(swap, swap); else if (pre.complete) swap(); else pre.onload = pre.onerror = swap;
+    finishShow(it, url);
+  }
+  function showVideo(it, url) {
+    var e = entryFor(it.file), d = (manifest && manifest.device) || {};
+    media.video = true;
+    media.w = d.width_px || (e && e.width) || vid.videoWidth; media.h = d.height_px || (e && e.height) || vid.videoHeight;
+    if (!pixTest) { img.style.display = "none"; vid.style.display = "block"; }
+    if (vid.getAttribute("src") !== url) {
+      if (e && e.poster) vid.poster = baseUrl + e.poster; else vid.removeAttribute("poster");   // the still, while the video loads
+      vid.src = url; vid.load();
+    }
+    var pr = vid.play(); if (pr && pr.catch) pr.catch(function () {});
+    layout(); msg.style.display = "none";
+    if ($("diag").classList.contains("open")) diagnostics();
+  }
+  function stopVideo() {
+    media.video = false;
+    try { vid.pause(); } catch (e) {}
+    vid.removeAttribute("src"); vid.removeAttribute("poster"); try { vid.load(); } catch (e) {}
+    vid.style.display = "none"; if (!pixTest) img.style.display = "block";
+  }
+  function finishShow(it, url) {
     $("openLink").href = url;
     try { history.replaceState(null, "", "#" + encodeURIComponent(groups[gi].id) + "/" + hinge + "/" + it.style); } catch (e) {}
     if (!guide && !adjust) saveView();
@@ -677,7 +714,7 @@
       if (h === undefined) return;
       var g = groups[gi], st = stylesAt(g, h);
       var s = st.indexOf(wantStyle) >= 0 ? wantStyle : (st.indexOf("color") >= 0 ? "color" : st[0]);
-      g.items.forEach(function (x) { if (x.hinge === h && x.style === s) preload(x.file); });
+      g.items.forEach(function (x) { if (x.hinge === h && x.style === s && !isVideoFile(x.file)) preload(x.file); });
     });
   }
   function segButtons(root, g, it) {                 // style choices as a segmented control
@@ -766,7 +803,7 @@
     guide = { step: Math.max(1, Math.min(GUIDE_STEPS.length, step)) };
     var st = GUIDE_STEPS[guide.step - 1], k = groupIndexByKind(st.kind);
     if (k >= 0) { gi = k; hinge = nearestHinge(groups[gi], hinge); }
-    if (st.kind === "scene" && GUIDE_KINDS.indexOf(wantStyle) >= 0) wantStyle = "color";
+    if (st.kind === "scene") wantStyle = "color";        // learn to fuse on the still; Begin starts the motion
     closeSheets(); setPixTest(false);
     document.body.classList.add("guiding"); showGuideCard(true);
     if (prev !== guide.step) {                       // new drawing, and the card's contents slide in
@@ -778,6 +815,7 @@
   }
   function endGuide(done) {
     guide = null; document.body.classList.remove("guiding", "g-hidden");
+    wantStyle = defaultStyle();
     saveView();
     try { localStorage.setItem("duovision.guideDone", "1"); } catch (e) {}
     toggleOverlay(!done);
@@ -881,7 +919,7 @@
       var t = document.createElement("span"); t.className = "t"; t.textContent = g.title;
       var sub = document.createElement("span"); sub.className = "s";
       sub.textContent = !scene ? (g.id === "fold" ? "Find the angle" : "Centre yourself")
-        : h + "\u00b0" + (st.length > 1 ? " \u00b7 " + st.length + " styles" : "");
+        : h + "\u00b0" + (st.indexOf("motion") >= 0 ? " \u00b7 moving" : st.length > 1 ? " \u00b7 " + st.length + " styles" : "");
       b.appendChild(t); b.appendChild(sub);
       b.onclick = function () { leaveModes(); gi = k; hinge = nearestHinge(g, hinge); closeSheets(); setPixTest(false); toggleOverlay(true); show(); };
       (scene ? scenes : prep).appendChild(b);
@@ -915,7 +953,7 @@
   function resetAll() {
     ["duovision.panel", "duovision.view", "duovision.guideDone"].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
     setTheme(null);
-    prefs = { side: {}, band: {}, nudgeMm: {}, mask: true }; fitMode = false; wantStyle = "color";
+    prefs = { side: {}, band: {}, nudgeMm: {}, mask: true }; fitMode = false; wantStyle = defaultStyle();
     var hs = hingesOf(groups[gi]); if (hs.indexOf(120) >= 0) hinge = 120;
     layout(); show();
   }
@@ -941,7 +979,7 @@
   function setPixTest(on) {
     pixTest = on;
     var c = $("pixtest");
-    if (!on) { c.style.display = "none"; img.style.display = "block"; return; }
+    if (!on) { c.style.display = "none"; (media.video ? vid : img).style.display = "block"; return; }
     var r = dpr(), W = Math.round(window.innerWidth * r), H = Math.round(window.innerHeight * r);
     c.width = W; c.height = H; c.style.width = (W / r) + "px"; c.style.height = (H / r) + "px";
     var ctx = c.getContext("2d"), data = ctx.createImageData(W, H), a = data.data;
@@ -953,7 +991,7 @@
     }
     ctx.putImageData(data, 0, 0);
     ctx.fillStyle = "#ff3030"; ctx.fillRect(0, 0, 1, H); ctx.fillRect(W - 1, 0, 1, H); ctx.fillRect(0, 0, W, 1); ctx.fillRect(0, H - 1, W, 1);
-    c.style.display = "block"; img.style.display = "none";
+    c.style.display = "block"; img.style.display = "none"; vid.style.display = "none";
     msg.style.display = "none";
   }
 
@@ -967,7 +1005,7 @@
       (window.orientation !== undefined ? "window.orientation=" + window.orientation : "?") ;
     var land = window.matchMedia && window.matchMedia("(orientation: landscape)").matches;
     var it = current(), e = it ? entryFor(it.file) : null;
-    var nw = img.naturalWidth, nh = img.naturalHeight;
+    var nw = mediaW(), nh = mediaH();
     var cssW = parseFloat(img.style.width) || 0, cssH = parseFloat(img.style.height) || 0;
     var exact = !fitMode && nw > 0 && nw === devW && nh === devH && coversScreen() && (!vv || Math.abs(vv.scale - 1) < 1e-6);
     var pl = panelLayout();
@@ -1121,6 +1159,11 @@
     layout(); if (pixTest) setPixTest(true); if ($("diag").classList.contains("open")) diagnostics();
     var it = guide && current(); if (it) updateGuideUi(it);   // step 1 reacts to rotating the phone
   }
+  document.addEventListener("visibilitychange", function () {     // do not play to a hidden page
+    if (!media.video) return;
+    if (document.hidden) { try { vid.pause(); } catch (e) {} } else { var pr = vid.play(); if (pr && pr.catch) pr.catch(function () {}); }
+  });
+  vid.addEventListener("loadedmetadata", function () { layout(); });
   window.addEventListener("resize", onResize);
   document.addEventListener("fullscreenchange", onResize);
   document.addEventListener("webkitfullscreenchange", onResize);

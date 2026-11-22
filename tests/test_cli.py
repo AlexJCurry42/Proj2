@@ -238,6 +238,9 @@ def test_viewer_html_well_formed():
     # Light / dark theme with a switch in Settings; white stage in light mode.
     assert 'id="bTheme"' in html and "html.light" in html and "duovision.theme" in p.script
     assert 'var theme = "dark";' in p.script and "prefers-color-scheme" not in html      # dark is the default
+    # Looping videos: a <video> shown in the still's place, style "motion", stills for reduced motion.
+    assert 'id="vid"' in html and "playsinline" in html and "showVideo" in p.script and "defaultStyle" in p.script
+    assert 'motion: "Motion"' in p.script and "prefers-reduced-motion" in p.script
     # Setup guide: fold-guide card -> align card -> scene, driven by the manifest's group kinds.
     assert "GUIDE_STEPS" in p.script and "guideGo" in p.script and 'kind: "fold"' in p.script
     assert 'id="bGuideNext"' in html and "duovision.guideDone" in p.script

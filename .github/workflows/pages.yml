@@ -22,7 +22,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180       # a first build renders 24 videos (about 70 min); later builds reuse them
     steps:
       - uses: actions/checkout@v4
 
@@ -32,11 +32,23 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      - name: Install
-        run: python -m pip install .
+      - name: Install (with the bundled ffmpeg for videos)
+        run: python -m pip install ".[video]"
 
-      - name: Render images (full resolution) + manifest + viewer
-        run: python -m duovision batch --out site
+      # The looping videos take about three minutes each to render. They depend only on the
+      # engine, so keep them between builds and re-render only when duovision/ changes.
+      - name: Restore rendered videos
+        uses: actions/cache@v4
+        with:
+          path: site-videos
+          key: videos-${{ hashFiles('duovision/**', 'pyproject.toml') }}
+
+      - name: Render images (full resolution), videos, manifest and viewer
+        run: |
+          mkdir -p site site-videos
+          cp -n site-videos/*.mp4 site/ 2>/dev/null || true
+          python -m duovision batch --out site --videos
+          cp site/*.mp4 site-videos/
 
       - name: Check the site
         run: |
@@ -50,7 +62,9 @@ jobs:
           missing = [f for f in files if not (site / f).is_file()]
           assert files and not missing, f"{len(files)} entries, missing: {missing[:5]}"
           size = sum(p.stat().st_size for p in site.rglob("*") if p.is_file())
-          print(f"{len(files)} images, {size / 1e6:.0f} MB")
+          videos = [f for f in files if f.endswith(".mp4")]
+          assert len(videos) == 24, f"expected 24 videos, found {len(videos)}"
+          print(f"{len(files) - len(videos)} images, {len(videos)} videos, {size / 1e6:.0f} MB")
           assert size < 950e6, "GitHub Pages sites must stay under 1 GB"
           EOF
           touch site/.nojekyll
