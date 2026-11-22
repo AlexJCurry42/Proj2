@@ -54,6 +54,10 @@
   #msg { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 80vw; text-align: center;
     color: var(--dim); z-index: 5; }
   a { color: var(--accent); }
+  .warn { color: #ffcf6a; }
+  #fsWarn { display: none; }
+  #fsWarn.on { display: flex; }
+  html:fullscreen, html:-webkit-full-screen { background: #000; }
 </style>
 </head>
 <body>
@@ -69,6 +73,7 @@
     <button id="bPrev" aria-label="Previous angle">&#9664;</button>
     <div id="title">&ndash;<small></small></div>
     <button id="bNext" aria-label="Next angle">&#9654;</button>
+    <button id="bFull" aria-label="Full screen">&#9974; Full screen</button>
     <button id="bDiag">Info</button>
   </div>
   <div class="row"><span class="hint">Angle</span><div class="pills" id="hingePills"></div></div>
@@ -76,6 +81,7 @@
     <span style="flex:1"></span><button id="bFit">1:1 pixels</button></div>
 </div>
 <div class="overlay" id="bottom">
+  <div class="row warn" id="fsWarn"><span id="fsWarnText"></span></div>
   <div class="row hint" id="hintRow">
     <span id="instr"></span>
   </div>
@@ -92,6 +98,21 @@
   <div class="group"><h3>Tools</h3>
     <div class="pills"><button id="bPixTest">Pixel test (1:1 check)</button><button id="bDiag2">Diagnostics</button></div>
   </div>
+</div>
+
+<div class="sheet" id="fsHelp">
+  <button class="close" id="bFsHelpClose">Close</button>
+  <h2>Full screen</h2>
+  <p id="fsHelpWhy" class="hint"></p>
+  <p>The 3D picture only works when it fills the <b>whole</b> display at 1 image pixel = 1 display pixel,
+    so that the middle of the picture sits exactly on the hinge. Safari's address bar and toolbar take part of
+    the screen, which crops the picture and shifts it off the hinge.</p>
+  <p>On iPhone, Safari cannot make a web page full screen. Instead:</p>
+  <ol>
+    <li>In Safari tap <b>Share</b> &rarr; <b>Add to Home Screen</b> &rarr; <b>Add</b>.</li>
+    <li>Open DuoVision from the new home-screen icon. It runs with no Safari bars at all.</li>
+    <li>Hold the phone in landscape and check <b>Info</b>: &ldquo;viewport covers screen&rdquo; and &ldquo;fits exactly&rdquo; should both say YES.</li>
+  </ol>
 </div>
 
 <div class="sheet" id="diag">
@@ -157,19 +178,86 @@
 
   // ------------------------------------------------------------- display
   function dpr() { return window.devicePixelRatio || 1; }
-  function layout() {
-    if (!img.naturalWidth) return;
-    var w, h;
+
+  // ------------------------------------------------------- full screen
+  // The picture's middle column is the hinge, so it only projects correctly when the page
+  // covers the whole display at 1:1. requestFullscreen gives that where supported
+  // (desktop, Android, iPad); on iPhone Safari the home-screen app (standalone) does.
+  var docEl = document.documentElement;
+  function fsSupported() { return !!(docEl.requestFullscreen || docEl.webkitRequestFullscreen); }
+  function fsActive() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+  function isStandalone() {
+    return navigator.standalone === true || !!(window.matchMedia &&
+      (matchMedia("(display-mode: standalone)").matches || matchMedia("(display-mode: fullscreen)").matches));
+  }
+  function viewportDevPx() { var r = dpr(); return [Math.round(window.innerWidth * r), Math.round(window.innerHeight * r)]; }
+  function screenDevPx() { var r = dpr(); return [Math.round(screen.width * r), Math.round(screen.height * r)]; }
+  function coversScreen() {   // orientation-independent: iOS reports screen.width/height in portrait
+    var v = viewportDevPx(), s = screenDevPx();
+    var near = function (a, b) { return Math.abs(a - b) <= 1; };
+    return (near(v[0], s[0]) && near(v[1], s[1])) || (near(v[0], s[1]) && near(v[1], s[0]));
+  }
+  function enterFullscreen() {
+    fitMode = false;   // full screen is always 1:1: a scaled picture cannot line up with the hinge
+    var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+    if (!req) { if (!coversScreen()) openFsHelp(); layout(); show(); return; }
+    var p;
+    try { p = req.call(docEl, { navigationUI: "hide" }); } catch (e) { p = Promise.reject(e); }
+    Promise.resolve(p).then(function () {
+      try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {}); } catch (e) {}
+      toggleOverlay(false);
+    }, function (err) { openFsHelp(err); });
+    show();
+  }
+  function exitFullscreen() {
+    var ex = document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen;
+    if (ex) { try { var p = ex.call(document); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
+  }
+  function toggleFullscreen() { if (fsActive()) exitFullscreen(); else enterFullscreen(); }
+  function openFsHelp(err) {
+    closeSheets();
+    $("fsHelpWhy").textContent = fsSupported()
+      ? "This browser refused full screen" + (err && err.message ? " (" + err.message + ")" : "") + "."
+      : "This browser has no full-screen mode for web pages.";
+    $("fsHelp").classList.add("open");
+  }
+  function updateFullscreenUi() {
+    var b = $("bFull"), full = coversScreen();
+    if (fsActive()) { b.textContent = "Exit full screen"; b.className = "on"; }
+    else if (full) { b.innerHTML = "&#9974; Full screen &#10003;"; b.className = "on"; }
+    else { b.innerHTML = "&#9974; Full screen"; b.className = ""; }
+    var w = $("fsWarn"), t = $("fsWarnText");
     if (fitMode) {
-      var s = Math.min(window.innerWidth / img.naturalWidth, window.innerHeight / img.naturalHeight);
-      w = img.naturalWidth * s; h = img.naturalHeight * s;
+      t.textContent = "Fit preview: the picture is scaled, so the 3D will not work. Tap \u201c1:1 pixels\u201d.";
+      w.classList.add("on");
+    } else if (!full) {
+      var v = viewportDevPx(), s = screenDevPx();
+      t.textContent = "Not full screen (page " + v[0] + "\u00d7" + v[1] + " of " + Math.max(s[0], s[1]) + "\u00d7" +
+        Math.min(s[0], s[1]) + " device px): the picture is cropped and cannot line up with the hinge. Tap \u201cFull screen\u201d.";
+      w.classList.add("on");
+    } else w.classList.remove("on");
+  }
+
+  function layout() {
+    updateFullscreenUi();
+    if (!img.naturalWidth) return;
+    var r = dpr(), nw = img.naturalWidth, nh = img.naturalHeight, v = viewportDevPx();
+    var w, h, left, top;
+    if (fitMode) {
+      var s = Math.min(window.innerWidth / nw, window.innerHeight / nh);
+      w = nw * s; h = nh * s;
+      left = (window.innerWidth - w) / 2; top = (window.innerHeight - h) / 2;
       img.classList.add("fit");
     } else {
-      w = img.naturalWidth / dpr(); h = img.naturalHeight / dpr();
+      // 1:1, centred on the viewport (= on the hinge when the page covers the screen), snapped to whole
+      // device pixels so no resampling happens. If the viewport is smaller than the image it is cropped
+      // evenly on both sides, so the hinge column stays in the middle instead of drifting left.
+      w = nw / r; h = nh / r;
+      left = Math.round((v[0] - nw) / 2) / r; top = Math.round((v[1] - nh) / 2) / r;
       img.classList.remove("fit");
     }
     img.style.width = w + "px"; img.style.height = h + "px";
-    img.style.left = "0px"; img.style.top = "0px";
+    img.style.left = left + "px"; img.style.top = top + "px";
   }
   function preload(file) {
     if (!file || cache[file]) return cache[file];
@@ -226,7 +314,7 @@
       b.onclick = function (ev) { ev.stopPropagation(); wantStyle = s; show(); };
       sp.appendChild(b);
     });
-    $("bFit").textContent = fitMode ? "Fit (scaled!)" : "1:1 pixels";
+    $("bFit").textContent = fitMode ? "Fit preview (scaled!)" : "1:1 pixels";
     $("bFit").className = fitMode ? "" : "on";
   }
   function stepHinge(d) {
@@ -265,7 +353,7 @@
       d.appendChild(p); root.appendChild(d);
     });
   }
-  function closeSheets() { $("menu").classList.remove("open"); $("diag").classList.remove("open"); }
+  function closeSheets() { ["menu", "diag", "fsHelp"].forEach(function (id) { $(id).classList.remove("open"); }); }
   function openMenu() { closeSheets(); $("menu").classList.add("open"); }
   function openDiag() { closeSheets(); diagnostics(); $("diag").classList.add("open"); }
 
@@ -301,7 +389,7 @@
     var it = current(), e = it ? entryFor(it.file) : null;
     var nw = img.naturalWidth, nh = img.naturalHeight;
     var cssW = parseFloat(img.style.width) || 0, cssH = parseFloat(img.style.height) || 0;
-    var exact = !fitMode && nw > 0 && nw === devW && nh === devH && (!vv || Math.abs(vv.scale - 1) < 1e-6);
+    var exact = !fitMode && nw > 0 && nw === devW && nh === devH && coversScreen() && (!vv || Math.abs(vv.scale - 1) < 1e-6);
     var lines = [
       "window.inner        " + iw + " x " + ih + " CSS px",
       "documentElement     " + document.documentElement.clientWidth + " x " + document.documentElement.clientHeight,
@@ -312,15 +400,20 @@
       "device px (screen)  " + Math.round(screen.width * r) + " x " + Math.round(screen.height * r),
       "safe-area insets    t " + sp.paddingTop + "  r " + sp.paddingRight + "  b " + sp.paddingBottom + "  l " + sp.paddingLeft,
       "orientation         " + orient + (land ? " (landscape)" : " (portrait)"),
-      "standalone          " + (navigator.standalone === true ? "yes (home-screen app)" : (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches ? "yes" : "no")),
+      "standalone          " + (navigator.standalone === true ? "yes (home-screen app)" : (isStandalone() ? "yes" : "no")),
+      "full screen         " + (fsActive() ? "yes (Fullscreen API)" : "no") + "   API " + (fsSupported() ? "available" : "not available"),
+      "viewport covers     " + (coversScreen() ? "YES - page fills the whole display" : "NO - browser bars or window edges take part of the display"),
       "",
       "image               " + (it ? it.file : "-"),
       "natural size        " + nw + " x " + nh + (e ? "   (manifest " + e.width + " x " + e.height + ")" : ""),
       "CSS size            " + cssW.toFixed(3) + " x " + cssH.toFixed(3) + (fitMode ? "  (FIT mode, scaled)" : "  (= natural / dpr)"),
       "drawn device px     " + (cssW * r).toFixed(1) + " x " + (cssH * r).toFixed(1),
+      "image offset        " + ((parseFloat(img.style.left) || 0) * r).toFixed(1) + ", " + ((parseFloat(img.style.top) || 0) * r).toFixed(1) + " device px (centred on the viewport)",
       "fits exactly        " + (exact ? "YES - 1 image pixel = 1 display pixel, full screen"
-        : (nw > devW || nh > devH ? "NO - image is " + (nw - devW) + " x " + (nh - devH) + " device px larger than the viewport (cropped right/bottom)"
-          : "NO - viewport is " + (devW - nw) + " x " + (devH - nh) + " device px larger than the image")),
+        : fitMode ? "NO - fit preview is scaled (press 1:1 pixels)"
+        : (nw > devW || nh > devH ? "NO - image is " + (nw - devW) + " x " + (nh - devH) + " device px larger than the viewport (cropped evenly on both sides)"
+          : (nw === devW && nh === devH ? "NO - viewport does not cover the whole screen"
+          : "NO - viewport is " + (devW - nw) + " x " + (devH - nh) + " device px larger than the image"))),
       "",
       "userAgent           " + navigator.userAgent
     ];
@@ -346,8 +439,8 @@
   });
   document.addEventListener("keydown", function (ev) {
     var k = ev.key;
-    if (k === "Escape") { if ($("menu").classList.contains("open") || $("diag").classList.contains("open")) closeSheets(); else toggleOverlay(false); return; }
-    if ($("menu").classList.contains("open")) return;
+    if (k === "Escape") { if (document.querySelector(".sheet.open")) closeSheets(); else toggleOverlay(false); return; }
+    if ($("menu").classList.contains("open") || $("fsHelp").classList.contains("open")) return;
     if (k === "ArrowRight") stepHinge(1);
     else if (k === "ArrowLeft") stepHinge(-1);
     else if (k === "ArrowDown") stepGroup(1);
@@ -355,7 +448,8 @@
     else if (k === "s") stepStyle(1);
     else if (k === "m") openMenu();
     else if (k === "i" || k === "d") openDiag();
-    else if (k === "f") { fitMode = !fitMode; layout(); show(); }
+    else if (k === "f") toggleFullscreen();
+    else if (k === "p") { fitMode = !fitMode; layout(); show(); }
     else if (k === " " || k === "Enter") toggleOverlay();
     else return;
     ev.preventDefault();
@@ -366,6 +460,8 @@
   $("bPrev").onclick = function () { stepHinge(-1); };
   $("bNext").onclick = function () { stepHinge(1); };
   $("bFit").onclick = function () { fitMode = !fitMode; layout(); show(); };
+  $("bFull").onclick = toggleFullscreen;
+  $("bFsHelpClose").onclick = closeSheets;
   $("bRefresh").onclick = diagnostics;
   $("bPixTest").onclick = function () { closeSheets(); toggleOverlay(false); setPixTest(true); };
   $("bCopy").onclick = function () {
@@ -375,6 +471,8 @@
   };
   function onResize() { layout(); if (pixTest) setPixTest(true); if ($("diag").classList.contains("open")) diagnostics(); }
   window.addEventListener("resize", onResize);
+  document.addEventListener("fullscreenchange", onResize);
+  document.addEventListener("webkitfullscreenchange", onResize);
   window.addEventListener("orientationchange", function () { setTimeout(onResize, 300); });
   if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize);
   document.addEventListener("gesturestart", function (ev) { ev.preventDefault(); });   // no pinch zoom

@@ -203,6 +203,10 @@ def test_viewer_html_well_formed():
     assert "manifest.json" in p.script
     assert "devicePixelRatio" in p.script and "naturalWidth" in p.script
     assert "pixelated" in html
+    # True full screen (prefixed for WebKit) and a hinge-centred 1:1 layout, not a scaled fit.
+    assert "requestFullscreen" in p.script and "webkitRequestFullscreen" in p.script
+    assert "fullscreenchange" in p.script and "Add to Home Screen" in html
+    assert "coversScreen" in p.script and "(v[0] - nw) / 2" in p.script
     # Self-contained: no external scripts/styles.
     assert not any(u.startswith(("http:", "https:", "//")) for u in p.urls), p.urls
     assert "<script src" not in html

@@ -337,9 +337,6 @@ def test_integration_evaluate_real_encoder(name):
         assert e["plaque_kink_deg"] < 1.0
 
 
-@pytest.mark.xfail(reason="Matcher refinement for vertical head offsets was interrupted mid-rewrite; "
-                   "at quarter resolution the valid fraction is 0.43 (< 0.6). Real half-resolution "
-                   "encodes give 0.82 at dy=10 mm. Tracked in docs/STATUS.md.", strict=False)
 def test_vertical_head_offset_is_compensated(plaque_case, g120):
     sc, img = plaque_case
     centre = V.design_vertical_disparity(g120, VIEW, sc)
@@ -351,3 +348,8 @@ def test_vertical_head_offset_is_compensated(plaque_case, g120):
     assert e["recon"]["dv_field"] is not None
     assert e["valid_fraction_linkable"] > 0.6
     assert e["median_abs_err_mm"] < 1.0
+    # The median hides pattern-repeat lock (wrong repeats are ~30 mm off but agree L/R):
+    # also bound the outliers and check the estimated field matches the design field.
+    assert e["inlier_fraction"] > 0.95
+    assert e["p95_abs_err_mm"] < 2.0
+    assert e["vertical_disparity_est_p95_arcmin"] == pytest.approx(up["p95_arcmin"], rel=0.25)
