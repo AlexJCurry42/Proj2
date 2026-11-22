@@ -72,17 +72,17 @@ possible for any web page there. The viewer works alongside this:
   landscape, it scales the picture to the fixed 951 x 669 pt panel (true size
   in mm) and places it from where the window sits on the panel, so the hinge
   column is on the physical fold (CSS x 475.5) whatever window iOS gives.
-- **Hinge** controls in the top bar: nudge by 0.5 mm (`[`/`]` by 0.1 mm),
-  reset, choose which side the strip is on, whether the extra bar (when present) is
-  at the bottom or top, and mirror the strip (hide the
+- **Settings -> Hinge alignment**: Adjust the hinge position (0.5 and 0.1 mm
+  steps, reset), choose which side the strip is on, whether the extra bar (when
+  present) is at the bottom or top, and mirror the strip (hide the
   same width on the other side so both eyes get a symmetric frame). Settings
   are remembered per orientation.
 - Check on the **Align** card: the gold vertical line should sit exactly on
-  the fold. Info shows the layout, scale and hinge position.
+  the fold. Diagnostics shows the layout, scale and hinge position.
 - The browser resamples the picture by about 7%, so it is slightly soft. A
   native app is the only route to sharp 1:1 pixels across the full width.
 
-Check it in **Info** (Diagnostics): "viewport covers: YES" and "fits exactly:
+Check it in **Settings -> Diagnostics**: "viewport covers: YES" and "fits exactly:
 YES" mean one image pixel equals one display pixel across the whole screen. On
 the iPhone Duo inner display "fits exactly" reads "n/a" (iOS scales web pages
 there) and the "layout" and "hinge" lines describe the panel layout instead.
@@ -91,7 +91,23 @@ checkerboard; any moire or blur means the browser is scaling.
 
 ## Use it
 
-- **Setup guide** (starts on the first visit; later from Menu -> Setup guide). A
+- **Viewing.** Tap the picture to show or hide the bars. The top bar has the
+  Library (left) and Settings (right). The bottom dock steps through pictures
+  and angles and switches style (Colour, Mono, Texture). Swipe left or right
+  for the angle, up or down for the next picture.
+- **Library.** Pick a viewing angle, then a tile: *Fold guide* and *Align*
+  under Prepare, the 3D pictures below. The app reopens on the last picture.
+- **Settings** (a drawer on the right, so the hinge stays visible):
+  - *Picture*: viewing angle and style.
+  - *Display*: full screen, and True size or Fit (a scaled preview; the 3D
+    does not work in it).
+  - *Hinge alignment* (iPhone Duo): **Adjust** opens the alignment card with
+    large -0.5 / -0.1 / +0.1 / +0.5 mm buttons to move the gold line onto the
+    fold; plus the status strip side, the system bar position when iOS
+    reserves one, and the mirror switch.
+  - *Tools*: setup guide, save or open the picture, pixel test, diagnostics,
+    reset.
+- **Setup guide** (starts on the first visit; later from the Library or Settings). A
   glass card on the left half shows each step with an animated drawing of the
   gesture:
   1. *Open*: phone flat like a book; choose a viewing angle.
@@ -108,15 +124,9 @@ checkerboard; any moire or blur means the browser is scaling.
   `UIHinge` / `onHingeChange` by calling `window.duovisionSetHingeAngle(deg)`
   or dispatching a `duovision-hinge` event with `detail.degrees` (180 = flat).
   The Fold step then shows the live angle and says how far to fold or open.
-- Or start with **Align** for the angle you want: fold until the grid lines run
-  straight across the hinge, and move sideways until both halves look equally
-  wide. Then open a scene at the same angle.
-- Tap: show/hide the bar (angle pills, style pills, prev/next, menu, info).
-- Swipe left/right: next/previous hinge angle in the scene; up/down: next scene.
-- Desktop keys: arrows (angle / scene), `s` style, `m` menu, `i` diagnostics,
-  `f` full screen on/off, `p` toggle 1:1 / fit preview (fit is scaled, so the
-  3D does not work; for previewing only).
-- Saving to Photos: long-press the picture -> "Save to Photos" (or "open the
-  image alone" in the bar, then long-press). Photos shows it full screen too,
-  but may zoom it to fill; Safari's 1:1 mode is the reference.
+- Desktop keys: arrows (angle / picture), `s` style, `m` library, `,` settings,
+  `i` diagnostics, `f` full screen, `p` True size / Fit, `[` `]` hinge position
+  by 0.1 mm, Esc closes whatever is open.
+- Saving to Photos: long-press the picture -> "Save to Photos", or Settings ->
+  Save this picture -> Open, then long-press.
 - The URL hash (`#cube/120/color`) remembers the current image.

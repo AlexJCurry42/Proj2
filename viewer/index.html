@@ -26,9 +26,6 @@
     -webkit-touch-callout: default; /* long-press -> Save to Photos */ }
   #img.fit, #img.panel { image-rendering: auto; }
   #mask { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: #000; display: none; pointer-events: none; }
-  #panelRow { display: none; }
-  .panelmode.aligning #panelRow { display: flex; }
-  #nudgeVal { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
   #pixtest { position: absolute; left: 0; top: 0; display: none; image-rendering: pixelated; }
   button { font: inherit; font-weight: 500; letter-spacing: 0.01em; color: var(--fg); background: rgba(236, 231, 221, 0.06);
     border: 1px solid var(--line); border-radius: 999px; min-width: 48px; min-height: 46px; padding: 8px 16px; cursor: pointer;
@@ -56,7 +53,7 @@
   .sheet h2 { font-size: 26px; font-weight: 300; letter-spacing: 0.01em; margin: 4px 0 12px; }
   .sheet h3 { font-size: 12px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; margin: 20px 0 10px; color: var(--dim); }
   .group { border-top: 1px solid var(--line); padding: 6px 0 10px; }
-  .close { float: right; }
+  .close { float: right; margin-left: 12px; }
   #diagText { font: 13px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; color: var(--fg);
     background: #0f1116; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
   .ok { color: #7ee08a; } .bad { color: #ff9b7a; }
@@ -66,6 +63,68 @@
   .warn { color: #ffcf6a; }
   #fsWarn { display: none; }
   #fsWarn.on { display: flex; }
+  /* ---- controls shared by the bars, the library and the settings drawer */
+  .iconbtn { min-width: 46px; width: 46px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .iconbtn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
+  .lbl { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+  .stepper { display: inline-flex; align-items: center; gap: 6px; }
+  .stepper button { min-width: 42px; width: 42px; min-height: 42px; padding: 0; font-size: 20px; line-height: 1; }
+  .stepper .val { min-width: 62px; text-align: center; font-size: 19px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .stepper .val.name { min-width: 104px; font-size: 16px; font-weight: 400; }
+  .seg { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: rgba(236, 231, 221, 0.04); }
+  .seg button { border: 0; background: transparent; min-width: 0; min-height: 38px; padding: 6px 15px; color: var(--dim); }
+  .seg button.on { background: rgba(236, 231, 221, 0.15); color: var(--fg); }
+  .switch { position: relative; width: 56px; min-width: 56px; height: 32px; min-height: 32px; padding: 0; background: rgba(236, 231, 221, 0.10); }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: var(--dim);
+    transition: transform 0.25s var(--ease), background 0.25s var(--ease); }
+  .switch[aria-checked="true"] { background: rgba(205, 178, 122, 0.26); border-color: var(--accent); }
+  .switch[aria-checked="true"]::after { transform: translateX(24px); background: var(--accent); }
+  button.primary { background: var(--fg); color: #0b0b0d; border-color: var(--fg); font-weight: 600; }
+  button.primary:active { background: #fff; }
+  #top .row { flex-wrap: nowrap; }
+  #title { text-align: center; }
+  .dock { justify-content: space-between; row-gap: 10px; }
+  .dock .stepper .lbl { margin-right: 6px; }
+  #instr { display: block; text-align: center; width: 100%; }
+  /* ---- library: tiles */
+  .sheet.open { animation: sheetIn 0.3s var(--ease) both; }
+  @keyframes sheetIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
+  .tile { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 14px; min-height: 84px;
+    padding: 14px 16px; border-radius: 20px; text-align: left; }
+  .tile .t { font-size: 17px; font-weight: 400; letter-spacing: 0.01em; color: var(--fg); }
+  .tile .s { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
+  .tile.on .s { color: var(--accent); }
+  /* ---- settings drawer (right side, so the hinge and the left half stay visible) */
+  #settings { position: fixed; top: 0; bottom: 0; right: 0; width: 400px; max-width: 100%; z-index: 21; box-sizing: border-box; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; touch-action: pan-y; border-left: 1px solid var(--line);
+    padding: max(18px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) calc(26px + env(safe-area-inset-bottom)) 20px;
+    background: linear-gradient(180deg, rgba(22, 22, 25, 0.86), rgba(8, 8, 10, 0.92));
+    -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25);
+    box-shadow: -24px 0 60px rgba(0, 0, 0, 0.5); transform: translateX(105%); visibility: hidden;
+    transition: transform 0.42s var(--ease), visibility 0s linear 0.42s; }
+  #settings.open { transform: none; visibility: visible; transition: transform 0.42s var(--ease); }
+  #settings h2 { font-size: 26px; font-weight: 300; margin: 2px 0 6px; }
+  #settings h3 { font-size: 11px; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); margin: 22px 0 4px; }
+  .set-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .set-row .name { flex: 1 1 auto; font-size: 16px; }
+  .set-row .name small { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.35; color: var(--dim); }
+  .set-row.off { opacity: 0.4; pointer-events: none; }
+  a.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 0 16px; border: 1px solid var(--line);
+    border-radius: 999px; background: rgba(236, 231, 221, 0.06); color: var(--fg); text-decoration: none; font-weight: 500; }
+  /* ---- hinge adjust mode: the alignment card with a small control card */
+  #adjust { position: fixed; left: 16px; bottom: calc(14px + env(safe-area-inset-bottom)); width: 380px; z-index: 12; display: none; box-sizing: border-box;
+    padding: 18px 20px; border-radius: 26px; border: 1px solid var(--line);
+    background: linear-gradient(180deg, rgba(22, 22, 25, 0.80), rgba(10, 10, 12, 0.86));
+    -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+  .adjusting #adjust { display: block; animation: sheetIn 0.35s var(--ease) both; }
+  .adjusting .overlay { display: none !important; }
+  #adjVal { font-size: 40px; font-weight: 200; font-variant-numeric: tabular-nums; margin: 6px 0 2px; }
+  #adjText { font-size: 14px; line-height: 1.45; color: var(--dim); margin: 0 0 14px; }
+  .adj-btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .adj-btns button { min-width: 0; padding: 8px 4px; font-variant-numeric: tabular-nums; }
+
   /* ---- setup guide: a glass card on the left half, with an animated illustration per step */
   .guiding .overlay { display: none !important; }
   #guide { position: fixed; left: 16px; bottom: calc(14px + env(safe-area-inset-bottom)); width: 380px; z-index: 12; display: none;
@@ -101,8 +160,7 @@
   #gLiveHint { font-size: 13px; color: var(--dim); }
   .g-actions { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; }
   .g-actions .ghost { background: transparent; }
-  .g-actions .primary { margin-left: auto; min-width: 128px; background: var(--fg); color: #0b0b0d; border-color: var(--fg); font-weight: 600; }
-  .g-actions .primary:active { background: #fff; }
+  .g-actions .primary { margin-left: auto; min-width: 128px; }
   #bGuideExit { position: absolute; top: 12px; right: 12px; min-width: 34px; min-height: 34px; width: 34px; padding: 0; border-color: transparent;
     background: transparent; color: var(--dim); font-size: 20px; line-height: 1; }
   .g-tap { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--accent); vertical-align: 1px;
@@ -167,33 +225,21 @@
 
 <div class="overlay" id="top">
   <div class="row">
-    <button id="bMenu" aria-label="Menu">&#9776; Menu</button>
-    <button id="bPrev" aria-label="Previous angle">&#9664;</button>
+    <button id="bMenu" class="iconbtn" aria-label="Library"><svg viewBox="0 0 20 20"><path d="M3 6h14M3 10h14M3 14h14"></path></svg></button>
     <div id="title">&ndash;<small></small></div>
-    <button id="bNext" aria-label="Next angle">&#9654;</button>
-    <button id="bFull" aria-label="Full screen">&#9974; Full screen</button>
-    <button id="bDiag">Info</button>
+    <button id="bSettings" class="iconbtn" aria-label="Settings"><svg viewBox="0 0 20 20"><path d="M3 6h7M14 6h3M3 14h3M10 14h7"></path><circle cx="12" cy="6" r="2"></circle><circle cx="8" cy="14" r="2"></circle></svg></button>
   </div>
-  <div class="row"><span class="hint">Angle</span><div class="pills" id="hingePills"></div></div>
-  <div class="row" id="styleRow"><span class="hint">Style</span><div class="pills" id="stylePills"></div>
-    <span style="flex:1"></span><button id="bFit">1:1 pixels</button></div>
-  <div class="row" id="panelRow"><span class="hint">Hinge</span>
-    <button id="bNudgeL" aria-label="Move picture left">&#9664; 0.5 mm</button>
-    <span id="nudgeVal">0.0 mm</span>
-    <button id="bNudgeR" aria-label="Move picture right">0.5 mm &#9654;</button>
-    <button id="bNudge0">Reset</button>
-    <span class="hint">Status strip</span><button id="bSide">right</button>
-    <span class="hint" id="bandLbl">Bar</span><button id="bBand">bottom</button>
-    <button id="bMask">Mirror strip: on</button></div>
 </div>
 <div class="overlay" id="bottom">
   <div class="row warn" id="fsWarn"><span id="fsWarnText"></span></div>
-  <div class="row hint" id="hintRow">
-    <span id="instr"></span>
+  <div class="row dock">
+    <div class="stepper"><button id="bScenePrev" aria-label="Previous picture">&#8249;</button><span class="val name" id="sceneVal"></span>
+      <button id="bSceneNext" aria-label="Next picture">&#8250;</button></div>
+    <div class="seg" id="stylePills"></div>
+    <div class="stepper"><span class="lbl">Angle</span><button id="bPrev" aria-label="Smaller angle">&#8249;</button><span class="val" id="angleVal"></span>
+      <button id="bNext" aria-label="Larger angle">&#8250;</button></div>
   </div>
-  <div class="row hint" id="saveRow">
-    <span>Save: long-press the picture &rarr; &ldquo;Save to Photos&rdquo; (or <a id="openLink" href="#" target="_blank" rel="noopener">open the image alone</a>). Tap to hide this bar. Swipe &larr;/&rarr; to change angle, &uarr;/&darr; for the next scene.</span>
-  </div>
+  <div class="row hint" id="hintRow"><span id="instr"></span></div>
 </div>
 
 <section id="guide" aria-live="polite">
@@ -215,19 +261,62 @@
 </section>
 <button id="guideChip"></button>
 
-<div class="sheet" id="menu">
-  <button class="close" id="bMenuClose">Close</button>
-  <h2>DuoVision</h2>
-  <div class="hint">Fold the phone to the angle printed on each image, hold it about 30&nbsp;cm away, eyes level with the middle of the hinge and centred on it. New here? The setup guide walks you through it.</div>
-  <p><button id="bGuide" class="on">Setup guide &nbsp;&middot;&nbsp; four steps</button></p>
-  <div id="groups"></div>
-  <div class="group"><h3>Tools</h3>
-    <div class="pills"><button id="bPixTest">Pixel test (1:1 check)</button><button id="bDiag2">Diagnostics</button></div>
+<section id="adjust">
+  <div class="g-eyebrow"><span>Hinge position</span></div>
+  <div id="adjVal">0.0 mm</div>
+  <p id="adjText">Move the picture until the gold vertical line sits exactly on the fold.</p>
+  <div class="adj-btns">
+    <button id="bNudgeL" aria-label="Move left 0.5 mm">&#8249;&#8249; 0.5</button><button id="bNudgeLf" aria-label="Move left 0.1 mm">&#8249; 0.1</button>
+    <button id="bNudgeRf" aria-label="Move right 0.1 mm">0.1 &#8250;</button><button id="bNudgeR" aria-label="Move right 0.5 mm">0.5 &#8250;&#8250;</button>
   </div>
+  <div class="g-actions"><button class="ghost" id="bNudge0">Reset</button><button class="primary" id="bAdjDone">Done</button></div>
+</section>
+
+<div class="sheet" id="menu">
+  <button class="close iconbtn" id="bMenuClose" aria-label="Close the library"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"></path></svg></button>
+  <h2>Library</h2>
+  <div class="hint">Choose a viewing angle, then a picture. Fold the phone to that angle and hold it about 30&nbsp;cm away.</div>
+  <p id="guideP"><button id="bGuide" class="primary">Setup guide &nbsp;&middot;&nbsp; four steps</button></p>
+  <h3>Viewing angle</h3>
+  <div class="pills" id="hingePills"></div>
+  <h3 id="prepHead">Prepare</h3>
+  <div class="tiles" id="prepTiles"></div>
+  <h3>Pictures</h3>
+  <div class="tiles" id="sceneTiles"></div>
 </div>
 
+<aside id="settings" aria-label="Settings">
+  <button class="close iconbtn" id="bSetClose" aria-label="Close settings"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"></path></svg></button>
+  <h2>Settings</h2>
+  <h3>Picture</h3>
+  <div class="set-row"><span class="name">Viewing angle<small>Fold the phone to match</small></span>
+    <div class="stepper"><button id="bSetAngleDown" aria-label="Smaller angle">&#8249;</button><span class="val" id="setAngleVal"></span>
+      <button id="bSetAngleUp" aria-label="Larger angle">&#8250;</button></div></div>
+  <div class="set-row" id="setStyleRow"><span class="name">Style</span><div class="seg" id="setStyleSeg"></div></div>
+  <h3>Display</h3>
+  <div class="set-row"><span class="name">Full screen<small id="setFullSub"></small></span><button id="bFull">Enter</button></div>
+  <div class="set-row"><span class="name">Size<small id="setSizeSub"></small></span>
+    <div class="seg"><button id="bSizeTrue">True size</button><button id="bFit">Fit</button></div></div>
+  <h3>Hinge alignment</h3>
+  <div class="hint" id="setAlignNote"></div>
+  <div class="set-row" id="setNudgeRow"><span class="name">Hinge position<small id="setNudgeSub"></small></span><button id="bAdjust">Adjust</button></div>
+  <div class="set-row" id="setSideRow"><span class="name">Status strip<small>The side with the clock</small></span>
+    <div class="seg"><button id="bSideL">Left</button><button id="bSideR">Right</button></div></div>
+  <div class="set-row" id="setBandRow"><span class="name">System bar<small>Where iOS keeps its extra bar</small></span>
+    <div class="seg"><button id="bBandT">Top</button><button id="bBandB">Bottom</button></div></div>
+  <div class="set-row" id="setMaskRow"><span class="name">Mirror the strip<small>Hide the same width on the other side</small></span>
+    <button class="switch" id="bMask" role="switch" aria-checked="true" aria-label="Mirror the strip"></button></div>
+  <h3>Tools</h3>
+  <div class="set-row" id="setGuideRow"><span class="name">Setup guide<small>Four steps, about a minute</small></span><button id="bGuide2">Start</button></div>
+  <div class="set-row"><span class="name">Save this picture<small>Long-press it, or open it on its own</small></span>
+    <a class="btn" id="openLink" href="#" target="_blank" rel="noopener">Open</a></div>
+  <div class="set-row"><span class="name">Pixel test<small>Checks that the browser is not scaling</small></span><button id="bPixTest">Run</button></div>
+  <div class="set-row"><span class="name">Diagnostics<small>How the page maps to the display</small></span><button id="bDiag">Open</button></div>
+  <div class="set-row"><span class="name">Reset<small>Angle, alignment and the guide</small></span><button id="bReset">Reset</button></div>
+</aside>
+
 <div class="sheet" id="fsHelp">
-  <button class="close" id="bFsHelpClose">Close</button>
+  <button class="close iconbtn" id="bFsHelpClose" aria-label="Close"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"></path></svg></button>
   <h2>Full screen</h2>
   <p id="fsHelpWhy" class="hint"></p>
   <p>The 3D picture only works when it fills the <b>whole</b> display at 1 image pixel = 1 display pixel,
@@ -243,11 +332,11 @@
   <ol>
     <li>Tap <b>Share</b> &rarr; <b>Add to Home Screen</b> &rarr; <b>Add</b>, then launch DuoVision from the new icon.</li>
   </ol>
-  <p>Then hold the phone in landscape and check <b>Info</b>: &ldquo;viewport covers&rdquo; and &ldquo;fits exactly&rdquo; should both say YES.</p>
+  <p>Then hold the phone in landscape and check <b>Settings &rarr; Diagnostics</b>: &ldquo;viewport covers&rdquo; and &ldquo;fits exactly&rdquo; should both say YES.</p>
 </div>
 
 <div class="sheet" id="diag">
-  <button class="close" id="bDiagClose">Close</button>
+  <button class="close iconbtn" id="bDiagClose" aria-label="Close"><svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"></path></svg></button>
   <h2>Diagnostics</h2>
   <div class="hint">How Safari maps this page to the display. For exact pixels the image natural size must equal the computed device pixels and the scale must be 1.</div>
   <p><button id="bCopy">Copy text</button> <button id="bRefresh">Refresh</button></p>
@@ -263,6 +352,7 @@
   var img = $("img"), stage = $("stage"), msg = $("msg");
   var STYLE_ORDER = ["fold", "align", "color", "bw", "texture"];
   var STYLE_NAME = { fold: "fold guide", align: "align", color: "colour dots", bw: "black & white", texture: "texture" };
+  var STYLE_LABEL = { color: "Colour", bw: "Mono", texture: "Texture" };   // short names for the segmented controls
   var GUIDE_KINDS = ["fold", "align"];   // guide cards: their own menu groups, in this order, before the scenes
   var GUIDE_TITLE = { fold: "Fold guide", align: "Align" };
 
@@ -371,17 +461,18 @@
   function toggleFullscreen() { if (fsActive()) { userLeftFs = true; exitFullscreen(); } else enterFullscreen(); }
   function wantsAutoFullscreen() { return fsSupported() && !fsActive() && !userLeftFs && !fitMode && !coversScreen(); }
   function openFsHelp(err) {
-    closeSheets();
+    closeSheets(); closeSettings();
     $("fsHelpWhy").textContent = fsSupported()
       ? "This browser refused full screen" + (err && err.message ? " (" + err.message + ")" : "") + "."
       : "This browser has no full-screen mode for web pages.";
     $("fsHelp").classList.add("open");
   }
   function updateFullscreenUi() {
-    var b = $("bFull"), full = coversScreen();
-    if (fsActive()) { b.textContent = "Exit full screen"; b.className = "on"; }
-    else if (full) { b.innerHTML = "&#9974; Full screen &#10003;"; b.className = "on"; }
-    else { b.innerHTML = "&#9974; Full screen"; b.className = ""; }
+    var b = $("bFull"), full = coversScreen(), sub = $("setFullSub");
+    if (fsActive()) { b.textContent = "Exit"; b.disabled = false; sub.textContent = "On"; }
+    else if (full) { b.textContent = "On"; b.disabled = true; sub.textContent = "The page fills the display"; }
+    else { b.textContent = fsSupported() ? "Enter" : "How"; b.disabled = false; sub.textContent = "Browser bars are taking part of the display"; }
+    b.className = full ? "on" : "";
     var w = $("fsWarn"), t = $("fsWarnText"), mm = displayMismatch();
     if (fitMode) {
       t.textContent = "Fit preview: the picture is scaled, so the 3D will not work. Tap \u201c1:1 pixels\u201d.";
@@ -393,7 +484,7 @@
         (fsSupported() ? "Tap the picture or \u201cFull screen\u201d." : "Tap \u201cFull screen\u201d for how to fix it.");
       w.classList.add("on");
     } else if (mm) {
-      t.textContent = mm + " The picture cannot line up with the hinge until it matches the display (see Info).";
+      t.textContent = mm + " The picture cannot line up with the hinge until it matches the display (see Settings, Diagnostics).";
       w.classList.add("on");
     } else w.classList.remove("on");
     $("gWarn").textContent = w.classList.contains("on") ? t.textContent : "";
@@ -458,13 +549,34 @@
     var pl = panelLayout(); if (!pl) return;
     prefs.nudgeMm[pl.key] = dmm === null ? 0 : Math.round((pl.nudge + dmm) * 10) / 10; savePrefs(); layout();
   }
-  function flipSide() {
+  function setSide(side) {
     var pl = panelLayout(); if (!pl) return;
-    prefs.side[pl.key] = pl.side === "right" ? "left" : "right"; savePrefs(); layout();
+    prefs.side[pl.key] = side === "left" ? "left" : "right"; savePrefs(); layout();
   }
-  function flipBand() {
+  function setBand(at) {
     var pl = panelLayout(); if (!pl) return;
-    prefs.band[pl.key] = pl.bandAt === "bottom" ? "top" : "bottom"; savePrefs(); layout();
+    prefs.band[pl.key] = at === "top" ? "top" : "bottom"; savePrefs(); layout();
+  }
+  function fmtMm(v) { return (v > 0 ? "+" : v < 0 ? "\u2212" : "") + Math.abs(v).toFixed(1) + " mm"; }
+  // Settings drawer and adjust card mirror the current state; called after every layout.
+  function updateSettingsUi() {
+    var pl = panelLayout(), it = current();
+    $("bSizeTrue").className = fitMode ? "" : "on"; $("bFit").className = fitMode ? "on" : "";
+    $("setSizeSub").textContent = fitMode ? "Scaled to fit: the 3D will not work" : pl ? "Scaled to the panel's true size" : "One image pixel per display pixel";
+    $("setAlignNote").textContent = pl ? "" : fitMode ? "Not available in the fit preview."
+      : "Automatic on this display: the picture is centred. These settings apply on the iPhone Duo, where iOS keeps a status strip beside the page.";
+    ["setNudgeRow", "setSideRow", "setBandRow", "setMaskRow"].forEach(function (id) { $(id).classList.toggle("off", !pl); });
+    $("setBandRow").style.display = !pl || pl.band > 2 ? "" : "none";
+    $("setNudgeSub").textContent = pl ? fmtMm(pl.nudge) + (pl.nudge ? "" : " (centred)") : "";
+    $("bSideL").className = pl && pl.side === "left" ? "on" : ""; $("bSideR").className = pl && pl.side === "right" ? "on" : "";
+    $("bBandT").className = pl && pl.bandAt === "top" ? "on" : ""; $("bBandB").className = pl && pl.bandAt === "bottom" ? "on" : "";
+    $("bMask").setAttribute("aria-checked", prefs.mask ? "true" : "false");
+    $("adjVal").textContent = pl ? fmtMm(pl.nudge) : "";
+    if (it && groups[gi]) {
+      var hs = hingesOf(groups[gi]), k = hs.indexOf(hinge);
+      $("setAngleVal").textContent = hinge + "\u00b0";
+      $("bSetAngleDown").disabled = k <= 0; $("bSetAngleUp").disabled = k >= hs.length - 1;
+    }
   }
 
   function layout() {
@@ -484,10 +596,6 @@
         mask.style.width = Math.max(0, pl.side === "right" ? 2 * pl.hinge - window.innerWidth : window.innerWidth - 2 * pl.hinge) + "px";
         mask.style.left = pl.side === "right" ? "0px" : "auto"; mask.style.right = pl.side === "right" ? "auto" : "0px";
       }
-      $("nudgeVal").textContent = (pl.nudge > 0 ? "+" : "") + pl.nudge.toFixed(1) + " mm";
-      $("bSide").textContent = pl.side; $("bMask").textContent = "Mirror strip: " + (prefs.mask ? "on" : "off");
-      $("bBand").style.display = $("bandLbl").style.display = pl.band > 2 ? "" : "none";
-      $("bBand").textContent = pl.bandAt;
     } else if (fitMode) {
       var s = Math.min(window.innerWidth / nw, window.innerHeight / nh);
       w = nw * s; h = nh * s;
@@ -503,6 +611,7 @@
     }
     img.style.width = w + "px"; img.style.height = h + "px";
     img.style.left = left + "px"; img.style.top = top + "px";
+    updateSettingsUi();
   }
   function preload(file) {
     if (!file || cache[file]) return cache[file];
@@ -522,6 +631,7 @@
     if (pre.decode) pre.decode().then(swap, swap); else if (pre.complete) swap(); else pre.onload = pre.onerror = swap;
     $("openLink").href = url;
     try { history.replaceState(null, "", "#" + encodeURIComponent(groups[gi].id) + "/" + hinge + "/" + it.style); } catch (e) {}
+    if (!guide && !adjust) saveView();
     updateOverlay(it);
     // Preload neighbours (angles either side).
     var hs = hingesOf(groups[gi]), k = hs.indexOf(hinge);
@@ -532,40 +642,36 @@
       g.items.forEach(function (x) { if (x.hinge === h && x.style === s) preload(x.file); });
     });
   }
-  function updateOverlay(it) {
-    var g = groups[gi];
-    var title = $("title");
-    title.firstChild.nodeValue = g.title + " · " + hinge + "° ";
-    title.lastChild.textContent = it.style === "align" ? "alignment card" : (STYLE_NAME[it.style] || it.style);
-    $("instr").textContent = it.style === "fold"
-      ? "Fold the phone like a book until the picture runs true: straight lines and a perfect circle. Taller in the middle: fold further. Pinched: open slightly."
-      : it.style === "align"
-      ? "Fold the phone to " + hinge + "°. Move until all lines run straight across the hinge and both halves look equally wide."
-      : "Fold to " + hinge + "°, eyes ~30 cm, centred. Cross your eyes until the two top dots become three, then look down.";
-    document.body.classList.toggle("aligning", it.style === "align");   // hinge fine-tuning belongs to the Align card
-    updateGuideUi(it);
-    var hs = hingesOf(g), k = hs.indexOf(hinge);
-    $("bPrev").disabled = k <= 0; $("bNext").disabled = k >= hs.length - 1;
-    var hp = $("hingePills"); hp.innerHTML = "";
-    hs.forEach(function (h) {
-      var b = document.createElement("button"); b.textContent = h + "°";
-      if (h === hinge) b.className = "on";
-      b.onclick = function (ev) { ev.stopPropagation(); hinge = h; show(); };
-      hp.appendChild(b);
-    });
-    var sp = $("stylePills"); sp.innerHTML = "";
-    var nSt = stylesAt(g, hinge).length;
-    $("styleRow").querySelector(".hint").style.visibility = nSt > 1 ? "visible" : "hidden";
-    sp.style.visibility = nSt > 1 ? "visible" : "hidden";
+  function segButtons(root, g, it) {                 // style choices as a segmented control
+    root.innerHTML = "";
     stylesAt(g, hinge).forEach(function (s) {
-      var b = document.createElement("button"); b.textContent = STYLE_NAME[s] || s;
+      var b = document.createElement("button"); b.textContent = STYLE_LABEL[s] || s;
       if (s === it.style) b.className = "on";
-      b.onclick = function (ev) { ev.stopPropagation(); wantStyle = s; show(); };
-      sp.appendChild(b);
+      b.onclick = function () { wantStyle = s; show(); };
+      root.appendChild(b);
     });
-    $("bFit").textContent = fitMode ? "Fit preview (scaled!)" : "1:1 pixels";
-    $("bFit").className = fitMode ? "" : "on";
-    if (!fitMode && panelLayout()) { $("bFit").textContent = "Panel scale"; }
+  }
+  function updateOverlay(it) {
+    var g = groups[gi], title = $("title"), scene = groupKind(g) === "scene";
+    title.firstChild.nodeValue = g.title + " ";
+    title.lastChild.textContent = hinge + "\u00b0" + (scene ? " \u00b7 " + (STYLE_NAME[it.style] || it.style) : "");
+    $("instr").textContent = it.style === "fold"
+      ? "Fold until the picture runs true: straight lines and a perfect circle."
+      : it.style === "align"
+      ? "Fold to " + hinge + "\u00b0. Every line should run straight across the hinge, both halves equally wide."
+      : "Fold to " + hinge + "\u00b0. Cross your eyes until the two dots become three, then look down.";
+    updateGuideUi(it);
+    var hs = hingesOf(g), k = hs.indexOf(hinge), many = stylesAt(g, hinge).length > 1;
+    $("bPrev").disabled = k <= 0; $("bNext").disabled = k >= hs.length - 1;
+    $("angleVal").textContent = hinge + "\u00b0";
+    $("sceneVal").textContent = g.title;
+    $("bScenePrev").disabled = $("bSceneNext").disabled = groups.length < 2;
+    $("stylePills").style.visibility = many ? "visible" : "hidden";
+    segButtons($("stylePills"), g, it);
+    $("setStyleRow").style.display = many ? "" : "none";
+    segButtons($("setStyleSeg"), g, it);
+    updateSettingsUi();
+    if ($("menu").classList.contains("open")) renderLibrary();
   }
   function stepHinge(d) {
     var hs = hingesOf(groups[gi]), k = hs.indexOf(hinge) + d;
@@ -616,6 +722,8 @@
   function showGuideCard(on) { document.body.classList.toggle("g-hidden", !on); }
   function guideGo(step) {
     var prev = guide ? guide.step : 0;
+    if (adjust) { adjust = null; document.body.classList.remove("adjusting"); }
+    closeSettings();
     guide = { step: Math.max(1, Math.min(GUIDE_STEPS.length, step)) };
     var st = GUIDE_STEPS[guide.step - 1], k = groupIndexByKind(st.kind);
     if (k >= 0) { gi = k; hinge = nearestHinge(groups[gi], hinge); }
@@ -631,6 +739,7 @@
   }
   function endGuide(done) {
     guide = null; document.body.classList.remove("guiding", "g-hidden");
+    saveView();
     try { localStorage.setItem("duovision.guideDone", "1"); } catch (e) {}
     toggleOverlay(!done);
     show();
@@ -696,10 +805,11 @@
       if (w >= 280) { left = edge + 14; width = Math.min(400, w); }
     }
     g.style.left = left + "px"; g.style.width = width + "px"; $("guideChip").style.left = left + "px";
+    $("adjust").style.left = left + "px"; $("adjust").style.width = width + "px";
   }
 
   function stepGroup(d) {
-    if (guide) return;                  // the guide decides which card is shown
+    if (guide || adjust) return;        // the guide / adjust mode decide which card is shown
     var n = groups.length; if (!n) return;
     gi = (gi + d + n) % n; hinge = nearestHinge(groups[gi], hinge); show();
   }
@@ -713,26 +823,79 @@
     document.body.classList.toggle("show", on);
   }
 
-  // ---------------------------------------------------------------- menu
-  function buildMenu() {
-    var root = $("groups"); root.innerHTML = "";
-    groups.forEach(function (g, k) {
-      var d = document.createElement("div"); d.className = "group";
-      var h = document.createElement("h3"); h.textContent = g.title; d.appendChild(h);
-      var p = document.createElement("div"); p.className = "pills";
-      hingesOf(g).forEach(function (x) {
-        var b = document.createElement("button");
-        var st = stylesAt(g, x).filter(function (s) { return s !== "color" && GUIDE_KINDS.indexOf(s) < 0; });
-        b.textContent = x + "°" + (st.length ? " +" : "");
-        b.onclick = function () { guide = null; document.body.classList.remove("guiding", "g-hidden"); gi = k; hinge = x; closeSheets(); setPixTest(false); show(); };
-        p.appendChild(b);
-      });
-      d.appendChild(p); root.appendChild(d);
+  // ------------------------------------------------------------- library
+  function leaveModes() { guide = null; adjust = null; document.body.classList.remove("guiding", "g-hidden", "adjusting"); }
+  function renderLibrary() {
+    var all = {}; groups.forEach(function (g) { hingesOf(g).forEach(function (h) { all[h] = 1; }); });
+    var hp = $("hingePills"); hp.innerHTML = "";
+    Object.keys(all).map(Number).sort(function (a, b) { return a - b; }).forEach(function (h) {
+      var b = document.createElement("button"); b.textContent = h + "\u00b0";
+      if (h === hinge) b.className = "on";
+      b.onclick = function () { hinge = nearestHinge(groups[gi], h); show(); renderLibrary(); };
+      hp.appendChild(b);
     });
+    var prep = $("prepTiles"), scenes = $("sceneTiles"); prep.innerHTML = ""; scenes.innerHTML = "";
+    groups.forEach(function (g, k) {
+      var scene = groupKind(g) === "scene", b = document.createElement("button"), h = nearestHinge(g, hinge);
+      var st = stylesAt(g, h).filter(function (x) { return GUIDE_KINDS.indexOf(x) < 0; });
+      b.className = "tile" + (k === gi ? " on" : "");
+      var t = document.createElement("span"); t.className = "t"; t.textContent = g.title;
+      var sub = document.createElement("span"); sub.className = "s";
+      sub.textContent = !scene ? (g.id === "fold" ? "Find the angle" : "Centre yourself")
+        : h + "\u00b0" + (st.length > 1 ? " \u00b7 " + st.length + " styles" : "");
+      b.appendChild(t); b.appendChild(sub);
+      b.onclick = function () { leaveModes(); gi = k; hinge = nearestHinge(g, hinge); closeSheets(); setPixTest(false); toggleOverlay(true); show(); };
+      (scene ? scenes : prep).appendChild(b);
+    });
+    $("prepHead").style.display = prep.children.length ? "" : "none";
   }
   function closeSheets() { ["menu", "diag", "fsHelp"].forEach(function (id) { $(id).classList.remove("open"); }); }
-  function openMenu() { closeSheets(); $("menu").classList.add("open"); }
-  function openDiag() { closeSheets(); diagnostics(); $("diag").classList.add("open"); }
+  function openMenu() { closeSheets(); closeSettings(); renderLibrary(); $("menu").classList.add("open"); }
+  function openDiag() { closeSheets(); closeSettings(); diagnostics(); $("diag").classList.add("open"); }
+  function settingsOpen() { return $("settings").classList.contains("open"); }
+  function openSettings() { closeSheets(); updateSettingsUi(); $("settings").classList.add("open"); }
+  function closeSettings() { $("settings").classList.remove("open"); }
+
+  // ----------------------------------------------------------- view state
+  // The home-screen app always starts at "./", so the last picture is remembered here.
+  function saveView() {
+    try { localStorage.setItem("duovision.view", JSON.stringify({ g: groups[gi].id, h: hinge, s: wantStyle })); } catch (e) {}
+  }
+  function restoreView() {
+    try {
+      var v = JSON.parse(localStorage.getItem("duovision.view") || "null");
+      if (!v || typeof v !== "object") return false;
+      for (var k = 0; k < groups.length; k++) if (groups[k].id === v.g) {
+        gi = k; hinge = nearestHinge(groups[k], Number(v.h) || hinge);
+        if (STYLE_ORDER.indexOf(v.s) >= 0) wantStyle = v.s;
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+  function resetAll() {
+    ["duovision.panel", "duovision.view", "duovision.guideDone"].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+    prefs = { side: {}, band: {}, nudgeMm: {}, mask: true }; fitMode = false; wantStyle = "color";
+    var hs = hingesOf(groups[gi]); if (hs.indexOf(120) >= 0) hinge = 120;
+    layout(); show();
+  }
+
+  // ---------------------------------------------------- hinge adjust mode
+  // Shows the alignment card with a small control card, so the gold line can be moved onto
+  // the fold while watching it; Done returns to the picture that was open.
+  var adjust = null;   // { gi, hinge, style } to return to
+  function enterAdjust() {
+    if (!panelLayout()) return;
+    adjust = { gi: gi, hinge: hinge, style: wantStyle };
+    var k = groupIndexByKind("align"); if (k >= 0) { gi = k; hinge = nearestHinge(groups[gi], hinge); }
+    closeSettings(); closeSheets(); setPixTest(false);
+    document.body.classList.add("adjusting"); show();
+  }
+  function exitAdjust() {
+    if (!adjust) return;
+    gi = adjust.gi; hinge = adjust.hinge; wantStyle = adjust.style; adjust = null;
+    document.body.classList.remove("adjusting"); show(); openSettings();
+  }
 
   // ---------------------------------------------------------- pixel test
   function setPixTest(on) {
@@ -815,22 +978,29 @@
   stage.addEventListener("pointerup", function (ev) {
     if (!p0 || ev.pointerId !== p0.id) return;
     var dx = ev.clientX - p0.x, dy = ev.clientY - p0.y, dt = Date.now() - p0.t; p0 = null;
-    if (pixTest) { setPixTest(false); show(); return; }
+    if (pixTest) { setPixTest(false); toggleOverlay(true); show(); return; }   // back from the pixel test, bars visible again
     var ax = Math.abs(dx), ay = Math.abs(dy);
     if (Math.max(ax, ay) < 12) {                                              // tap (long-press -> save menu)
       if (dt < 450) {
-        if (wantsAutoFullscreen()) enterFullscreen();
+        if (settingsOpen()) closeSettings();                                    // tap outside the drawer closes it
+        else if (adjust) { /* the adjust card stays; Done closes it */ }
+        else if (wantsAutoFullscreen()) enterFullscreen();
         else if (guide) showGuideCard(document.body.classList.contains("g-hidden"));
         else toggleOverlay();
       }
       return;
     }
+    if (adjust || settingsOpen()) return;
     if (ax > 50 && ax > 1.5 * ay) stepHinge(dx < 0 ? 1 : -1);               // swipe left = larger angle
     else if (ay > 50 && ay > 1.5 * ax) stepGroup(dy < 0 ? 1 : -1);
   });
   document.addEventListener("keydown", function (ev) {
     var k = ev.key;
-    if (k === "Escape") { if (document.querySelector(".sheet.open")) closeSheets(); else if (guide) showGuideCard(false); else toggleOverlay(false); return; }
+    if (k === "Escape") {
+      if (document.querySelector(".sheet.open")) closeSheets(); else if (settingsOpen()) closeSettings(); else if (adjust) exitAdjust();
+      else if (guide) showGuideCard(false); else toggleOverlay(false);
+      return;
+    }
     if ($("menu").classList.contains("open") || $("fsHelp").classList.contains("open")) return;
     if (guide && (k === "Enter" || k === " " || k === "Backspace")) {
       if (k === "Backspace") { if (guide.step > 1) guideGo(guide.step - 1); } else guideNext();
@@ -842,9 +1012,10 @@
     else if (k === "ArrowUp") stepGroup(-1);
     else if (k === "s") stepStyle(1);
     else if (k === "m") openMenu();
+    else if (k === ",") { if (settingsOpen()) closeSettings(); else openSettings(); }
     else if (k === "i" || k === "d") openDiag();
     else if (k === "f") toggleFullscreen();
-    else if (k === "p") { fitMode = !fitMode; layout(); show(); }
+    else if (k === "p") setFit(!fitMode);
     else if (k === "[") nudge(-0.1);
     else if (k === "]") nudge(0.1);
     else if (k === " " || k === "Enter") toggleOverlay();
@@ -852,12 +1023,25 @@
     ev.preventDefault();
   });
   ["top", "bottom"].forEach(function (id) { $(id).addEventListener("pointerup", function (ev) { ev.stopPropagation(); }); });
+  function setFit(on) { fitMode = !!on; layout(); show(); }
   $("bMenu").onclick = openMenu; $("bMenuClose").onclick = closeSheets;
-  $("bDiag").onclick = openDiag; $("bDiag2").onclick = openDiag; $("bDiagClose").onclick = closeSheets;
-  $("bPrev").onclick = function () { stepHinge(-1); };
-  $("bNext").onclick = function () { stepHinge(1); };
-  $("bFit").onclick = function () { fitMode = !fitMode; layout(); show(); };
+  $("bSettings").onclick = function () { if (settingsOpen()) closeSettings(); else openSettings(); };
+  $("bSetClose").onclick = closeSettings;
+  $("bDiag").onclick = openDiag; $("bDiagClose").onclick = closeSheets;
+  $("bPrev").onclick = $("bSetAngleDown").onclick = function () { stepHinge(-1); };
+  $("bNext").onclick = $("bSetAngleUp").onclick = function () { stepHinge(1); };
+  $("bScenePrev").onclick = function () { stepGroup(-1); };
+  $("bSceneNext").onclick = function () { stepGroup(1); };
+  $("bSizeTrue").onclick = function () { setFit(false); };
+  $("bFit").onclick = function () { setFit(true); };
   $("bFull").onclick = toggleFullscreen;
+  $("bAdjust").onclick = enterAdjust; $("bAdjDone").onclick = exitAdjust;
+  $("bSideL").onclick = function () { setSide("left"); }; $("bSideR").onclick = function () { setSide("right"); };
+  $("bBandT").onclick = function () { setBand("top"); }; $("bBandB").onclick = function () { setBand("bottom"); };
+  $("bGuide2").onclick = function () { guideGo(1); };
+  $("bReset").onclick = function () {
+    resetAll(); var b = $("bReset"); b.textContent = "Done"; setTimeout(function () { b.textContent = "Reset"; }, 1400);
+  };
   $("bGuide").onclick = function () { guideGo(1); };
   function guideNext() { if (guide.step >= GUIDE_STEPS.length) endGuide(true); else guideGo(guide.step + 1); }
   $("bGuideBack").onclick = function () { if (guide && guide.step > 1) guideGo(guide.step - 1); };
@@ -878,14 +1062,14 @@
     });
   })();
   $("bNudgeL").onclick = function () { nudge(-0.5); };
+  $("bNudgeLf").onclick = function () { nudge(-0.1); };
+  $("bNudgeRf").onclick = function () { nudge(0.1); };
   $("bNudgeR").onclick = function () { nudge(0.5); };
   $("bNudge0").onclick = function () { nudge(null); };
-  $("bSide").onclick = flipSide;
-  $("bBand").onclick = flipBand;
   $("bMask").onclick = function () { prefs.mask = !prefs.mask; savePrefs(); layout(); };
   $("bFsHelpClose").onclick = closeSheets;
   $("bRefresh").onclick = diagnostics;
-  $("bPixTest").onclick = function () { closeSheets(); toggleOverlay(false); setPixTest(true); };
+  $("bPixTest").onclick = function () { closeSheets(); closeSettings(); toggleOverlay(false); setPixTest(true); };
   $("bCopy").onclick = function () {
     var text = diagnostics();
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { $("bCopy").textContent = "Copied"; });
@@ -902,7 +1086,7 @@
   if (window.visualViewport) window.visualViewport.addEventListener("resize", onResize);
   document.addEventListener("gesturestart", function (ev) { ev.preventDefault(); });   // no pinch zoom
   document.addEventListener("touchmove", function (ev) {
-    if (!ev.target.closest || !ev.target.closest(".sheet")) ev.preventDefault();
+    if (!ev.target.closest || !ev.target.closest(".sheet, #settings")) ev.preventDefault();
   }, { passive: false });
 
   // ----------------------------------------------------------------- boot
@@ -921,11 +1105,13 @@
     manifest = m; groups = buildGroups(m).filter(function (g) { return g.items && g.items.length; });
     if (!groups.length) throw new Error("manifest has no images");
     var hadHash = !!location.hash;
-    buildMenu(); restoreFromHash(); show(); toggleOverlay(true);
-    $("bGuide").parentNode.style.display = hasGuide() ? "" : "none";
+    restoreFromHash();
+    var resumed = !hadHash && restoreView();          // a relaunch picks up the last picture
+    show(); toggleOverlay(true);
+    $("guideP").style.display = $("setGuideRow").style.display = hasGuide() ? "" : "none";
     var guideDone = false;
     try { guideDone = localStorage.getItem("duovision.guideDone") === "1"; } catch (e) {}
-    if (!hadHash) { if (hasGuide() && !guideDone) guideGo(1); else openMenu(); }
+    if (!hadHash) { if (hasGuide() && !guideDone) guideGo(1); else if (!resumed) openMenu(); }
   }).catch(function (err) {
     msg.innerHTML = "Could not load <b>" + manifestUrl + "</b> (" + String(err.message || err) +
       ").<br>Serve this folder over http(s) with manifest.json and the PNGs next to index.html " +

@@ -230,7 +230,11 @@ def test_viewer_html_well_formed():
     assert "displayMismatch" in p.script and "navigator.standalone === true" in p.script
     # iPhone Duo: works alongside the iOS status strip (hinge on the fold, panel scale, nudge).
     assert "panelLayout" in p.script and "nudgeMm" in p.script and 'id="mask"' in html
-    assert "DUO_PANEL_PT = [951, 669]" in p.script and "flipBand" in p.script
+    assert "DUO_PANEL_PT = [951, 669]" in p.script and "setBand" in p.script
+    # Library tiles, settings drawer, hinge adjust mode; the last picture is remembered.
+    for el in ('id="settings"', 'id="adjust"', 'id="sceneTiles"', 'id="bAdjust"', 'role="switch"'):
+        assert el in html, el
+    assert "enterAdjust" in p.script and "duovision.view" in p.script and "resetAll" in p.script
     # Setup guide: fold-guide card -> align card -> scene, driven by the manifest's group kinds.
     assert "GUIDE_STEPS" in p.script and "guideGo" in p.script and 'kind: "fold"' in p.script
     assert 'id="bGuideNext"' in html and "duovision.guideDone" in p.script
