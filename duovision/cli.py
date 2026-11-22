@@ -1,4 +1,4 @@
-"""Command line: ``python -m duovision {generate,align,batch,verify} ...``"""
+"""Command line: ``python -m duovision {generate,align,fold,batch,verify} ...``"""
 from __future__ import annotations
 
 import argparse
@@ -62,6 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--hinge", type=float, default=DEFAULT_HINGE_DEG)
     _add_view_args(a)
     a.add_argument("--out", required=True)
+
+    f = sub.add_parser("fold", help="render the fold-angle guide (a picture that only looks right when folded)")
+    f.add_argument("--hinge", type=float, default=DEFAULT_HINGE_DEG)
+    _add_view_args(f)
+    f.add_argument("--out", required=True)
 
     b = sub.add_parser("batch", help="render the agreed batch + manifest.json for the viewer")
     b.add_argument("--out", required=True, help="output directory")
@@ -139,6 +144,18 @@ def cmd_align(a) -> int:
     return 0
 
 
+def cmd_fold(a) -> int:
+    from .batch import render_fold, save_png
+
+    p = _params(a, "fold")
+    image, stats = render_fold(p)
+    info = save_png(a.out, image, p, stats, palette=True)
+    fw, fh = stats["frame_mm"]
+    print(f"wrote {a.out}  {image.shape[1]}x{image.shape[0]}  {info['png_mode']}  "
+          f"{info['bytes'] / 1e6:.2f} MB  frame {fw:.0f} x {fh:.0f} mm at z={stats['plane_z_mm']:.1f} mm")
+    return 0
+
+
 def cmd_batch(a) -> int:
     from .batch import batch_jobs, run_batch
 
@@ -146,7 +163,8 @@ def cmd_batch(a) -> int:
                         sep_bg=a.sep_bg, sep_near=a.sep_near, bg_vee=a.bg_vee, seed=a.seed,
                         dot_px=a.dot_px, scale=a.scale)
     jobs = batch_jobs(a.scenes, a.hinges, styles=a.styles, extra_hinge=a.extra_hinge, base=base,
-                      align=(a.styles is None or "align" in a.styles))
+                      align=(a.styles is None or "align" in a.styles),
+                      fold=(a.styles is None or "fold" in a.styles))
     if a.dry_run:
         for j in jobs:
             print(j.file)
@@ -252,7 +270,8 @@ def main(argv=None) -> int:
     if getattr(args, "scale", 1.0) <= 0:
         print("--scale must be positive", file=sys.stderr)
         return 2
-    return {"generate": cmd_generate, "align": cmd_align, "batch": cmd_batch, "verify": cmd_verify}[args.cmd](args)
+    return {"generate": cmd_generate, "align": cmd_align, "fold": cmd_fold, "batch": cmd_batch,
+            "verify": cmd_verify}[args.cmd](args)
 
 
 if __name__ == "__main__":  # pragma: no cover

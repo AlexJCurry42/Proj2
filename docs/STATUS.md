@@ -19,6 +19,11 @@ Virtual-viewer results, plaque at 120 deg, half resolution, colour dots:
 | Fold 5 deg off | 0.85-0.89 | 6.7-6.9 |
 | Flat SIRDS shown on the fold (quarter res) | 7.1 | 64 |
 
+Fold-angle guide (`fold_XXX.png`, viewer setup guide): an anamorphic picture that looks flat
+only at the encoded fold. Cue strength: 0.15 deg of bend at the hinge per degree of fold error
+(0.75 deg at 5 deg off), identical for either eye, so expect people to land within about 5 deg.
+Not yet tried by a person on the device.
+
 Open items:
 - Resolved: `tests/test_verify.py::test_vertical_head_offset_is_compensated` now passes
   (xfail removed). The two-pass, fixation-nearest peak selection was already complete;

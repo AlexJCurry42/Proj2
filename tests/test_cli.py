@@ -56,12 +56,22 @@ def test_palette_roundtrip_exact(tmp_path):
     assert stats == {}
 
 
+def test_fold_cli(tmp_path, capsys):
+    out = tmp_path / "fold.png"
+    assert main(["fold", "--hinge", "110", "--scale", str(SCALE), "--out", str(out)]) == 0
+    size, _mode, text = _meta(out)
+    assert size == (DEV.width_px, DEV.height_px)
+    assert text["duovision.kind"] == "fold" and float(text["duovision.hinge"]) == 110
+    assert "duovision.scene" not in text
+    assert "frame" in capsys.readouterr().out
+
+
 def test_batch_job_list_default():
     jobs = B.batch_jobs()
     files = [j.file for j in jobs]
     n_h = len(HINGE_SWEEP_DEG)
-    assert len(files) == len(set(files)) == n_h + 8 * n_h + 16
-    assert "align_100.png" in files and "cube_135_color.png" in files
+    assert len(files) == len(set(files)) == 2 * n_h + 8 * n_h + 16
+    assert "fold_100.png" in files and "align_100.png" in files and "cube_135_color.png" in files
     assert "heart_120_texture.png" in files and "pawn_120_bw.png" in files
     assert "cube_125_bw.png" not in files
 
@@ -105,7 +115,7 @@ def test_batch_cli_subset(tmp_path):
     m = json.loads((out / "manifest.json").read_text())
     files = sorted(p.name for p in out.glob("*.png") if p.name not in B.VIEWER_FILES)
     assert sorted(e["file"] for e in m["entries"]) == files
-    expected = {"align_115.png", "align_120.png", "plaque_115_color.png", "plaque_120_color.png",
+    expected = {"fold_115.png", "fold_120.png", "align_115.png", "align_120.png", "plaque_115_color.png", "plaque_120_color.png",
                 "cube_115_color.png", "cube_120_color.png", "plaque_120_bw.png", "cube_120_bw.png",
                 "plaque_120_texture.png", "cube_120_texture.png"}
     assert set(files) == expected
@@ -114,15 +124,16 @@ def test_batch_cli_subset(tmp_path):
         assert (e["width"], e["height"]) == size == (DEV.width_px, DEV.height_px)
         assert e["hinge"] == int(float(text["duovision.hinge"]))
         assert e["params"]["scale"] == SCALE
-        if e["kind"] == "align":
-            assert e["scene"] == "align" and e["style"] == "align"
+        if e["kind"] in ("align", "fold"):
+            assert e["scene"] == e["style"] == e["kind"]
         else:
             assert text["duovision.scene"] == e["scene"] and text["duovision.style"] == e["style"]
             if e["style"] == "texture":
                 assert mode == "RGB"
             assert "linked_fraction" in e["stats"]
     gids = [g["id"] for g in m["groups"]]
-    assert gids[0] == "align" and set(gids) == {"align", "plaque", "cube"}
+    assert gids[:2] == ["fold", "align"] and set(gids) == {"fold", "align", "plaque", "cube"}
+    assert [g["kind"] for g in m["groups"]][:3] == ["fold", "align", "scene"]
     cube = next(g for g in m["groups"] if g["id"] == "cube")
     assert cube["hinges"] == [115, 120] and set(cube["styles"]) == {"color", "bw", "texture"}
     assert (out / "index.html").exists()
@@ -220,6 +231,9 @@ def test_viewer_html_well_formed():
     # iPhone Duo: works alongside the iOS status strip (hinge on the fold, panel scale, nudge).
     assert "panelLayout" in p.script and "nudgeMm" in p.script and 'id="mask"' in html
     assert "DUO_PANEL_PT = [951, 669]" in p.script and "flipBand" in p.script
+    # Setup guide: fold-guide card -> align card -> scene, driven by the manifest's group kinds.
+    assert "GUIDE_STEPS" in p.script and "guideGo" in p.script and 'kind: "fold"' in p.script
+    assert 'id="bGuideNext"' in html and "duovision.guideDone" in p.script
     # Self-contained: no external scripts/styles.
     assert not any(u.startswith(("http:", "https:", "//")) for u in p.urls), p.urls
     assert "<script src" not in html

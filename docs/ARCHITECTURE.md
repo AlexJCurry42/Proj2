@@ -123,11 +123,23 @@ def encode_stereogram(geom, view, scene, style="color", *, seed=0, dot_px=5) -> 
 def guide_dot_pixels(geom, view) -> ((i_l, j_l), (i_r, j_r))   # fold-aware, fuse to 3 dots at the background depth
 def draw_guide_band(image, geom, view, label: str) -> image      # fills reserved rows: dots + small label
 def alignment_image(geom, view, label: str) -> uint8 (H, W, 3)   # frontal square+circle+cross projected from the cyclopean eye
+def fold_guide_extent(geom, view) -> (half_w, half_h)            # mm in the plane z = z_background, frame of the fold-guide picture
+def fold_guide_target(half_w, half_h, px_per_mm, hinge_deg) -> uint8 (h, w, 3)   # the undistorted picture (frame, checks, face, "FOLD 120°")
+def fold_guide_image(geom, view, label: str = "") -> uint8 (H, W, 3)             # that picture projected from the cyclopean eye
 ```
-CLI (`python -m duovision ...`): `generate`, `align`, `batch`, `verify`.
-Batch output: `{scene}_{hinge:03d}_{style}.png`, `align_{hinge:03d}.png`, `manifest.json`.
+`fold_guide_image` is the fold-angle guide: each display pixel shows the colour of the point of
+the frontal plane `z = z_background` that its cyclopean ray passes through, so the picture looks
+flat and undistorted only from the design viewpoint at the encoded hinge angle (flatter: tall in
+the middle; folded further: pinched in the middle). The frame stays inside the central 78 % of the
+display width so the iPhone Duo's status strip never hides it. A 5 deg fold error bends the frame
+edges by about 0.75 deg at the hinge, the same for either eye.
+
+CLI (`python -m duovision ...`): `generate`, `align`, `fold`, `batch`, `verify`.
+Batch output: `{scene}_{hinge:03d}_{style}.png`, `fold_{hinge:03d}.png`, `align_{hinge:03d}.png`,
+`manifest.json` (entry/group kinds `fold`, `align`, `scene`; groups ordered fold, align, scenes).
 Viewer: static `viewer/index.html` that loads `manifest.json` and shows each image at
-exact device pixels, with a diagnostics readout (viewport, devicePixelRatio).
+exact device pixels, with a diagnostics readout (viewport, devicePixelRatio) and a four-step
+setup guide (unfold, fold on the fold-guide card, centre on the align card, fuse a scene).
 
 ## Verifier — `duovision/verify.py`, `baseline.py`
 

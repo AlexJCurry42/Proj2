@@ -91,7 +91,16 @@ checkerboard; any moire or blur means the browser is scaling.
 
 ## Use it
 
-- Start with **Align** for the angle you want: fold until the grid lines run
+- **Setup guide** (starts on the first visit; later from Menu -> Setup guide):
+  1. *Unfold*: phone flat, landscape, hinge upright; pick an angle.
+  2. *Fold*: fold like a book until the fold-guide picture looks flat (straight
+     frame, square checks, round face). Tall in the middle: fold more. Pinched
+     in the middle: open up.
+  3. *Centre*: on the Align card, nose in line with the hinge, eyes level with
+     the blue line, both halves equally wide.
+  4. *See it in 3D*: cross your eyes until the two dots become three, look down.
+  The text sits in the bottom bar; tap the picture to hide it and look.
+- Or start with **Align** for the angle you want: fold until the grid lines run
   straight across the hinge, and move sideways until both halves look equally
   wide. Then open a scene at the same angle.
 - Tap: show/hide the bar (angle pills, style pills, prev/next, menu, info).

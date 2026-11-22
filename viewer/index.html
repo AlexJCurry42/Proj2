@@ -63,6 +63,12 @@
   .warn { color: #ffcf6a; }
   #fsWarn { display: none; }
   #fsWarn.on { display: flex; }
+  #guideRow, #guideTextRow { display: none; }
+  .guiding #guideRow, .guiding #guideTextRow { display: flex; }
+  .guiding #hintRow, .guiding #saveRow, .guiding #styleRow, .guiding #panelRow { display: none; }
+  #guideStep { border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: 4px 12px; font-size: 14px; white-space: nowrap; }
+  #guideTitle { font-weight: 600; font-size: 18px; }
+  #guideText { font-size: 17px; line-height: 1.4; }
   html:fullscreen, html:-webkit-full-screen { background: #000; }
 </style>
 </head>
@@ -97,10 +103,16 @@
 </div>
 <div class="overlay" id="bottom">
   <div class="row warn" id="fsWarn"><span id="fsWarnText"></span></div>
+  <div class="row" id="guideRow">
+    <span id="guideStep"></span><span id="guideTitle"></span><span style="flex:1"></span>
+    <button id="bGuideBack">&#9664; Back</button><button id="bGuideNext" class="on">Next &#9654;</button>
+    <button id="bGuideExit">Exit guide</button>
+  </div>
+  <div class="row" id="guideTextRow"><span id="guideText"></span></div>
   <div class="row hint" id="hintRow">
     <span id="instr"></span>
   </div>
-  <div class="row hint">
+  <div class="row hint" id="saveRow">
     <span>Save: long-press the picture &rarr; &ldquo;Save to Photos&rdquo; (or <a id="openLink" href="#" target="_blank" rel="noopener">open the image alone</a>). Tap to hide this bar. Swipe &larr;/&rarr; to change angle, &uarr;/&darr; for the next scene.</span>
   </div>
 </div>
@@ -108,7 +120,8 @@
 <div class="sheet" id="menu">
   <button class="close" id="bMenuClose">Close</button>
   <h2>DuoVision</h2>
-  <div class="hint">Fold the phone to the angle printed on each image, hold it about 30&nbsp;cm away, eyes level with the middle of the hinge and centred on it. Start with <b>Align</b>.</div>
+  <div class="hint">Fold the phone to the angle printed on each image, hold it about 30&nbsp;cm away, eyes level with the middle of the hinge and centred on it. New here? The setup guide walks you through it.</div>
+  <p><button id="bGuide" class="on">&#9654; Setup guide (4 steps)</button></p>
   <div id="groups"></div>
   <div class="group"><h3>Tools</h3>
     <div class="pills"><button id="bPixTest">Pixel test (1:1 check)</button><button id="bDiag2">Diagnostics</button></div>
@@ -150,8 +163,10 @@
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var img = $("img"), stage = $("stage"), msg = $("msg");
-  var STYLE_ORDER = ["align", "color", "bw", "texture"];
-  var STYLE_NAME = { align: "align", color: "colour dots", bw: "black & white", texture: "texture" };
+  var STYLE_ORDER = ["fold", "align", "color", "bw", "texture"];
+  var STYLE_NAME = { fold: "fold guide", align: "align", color: "colour dots", bw: "black & white", texture: "texture" };
+  var GUIDE_KINDS = ["fold", "align"];   // guide cards: their own menu groups, in this order, before the scenes
+  var GUIDE_TITLE = { fold: "Fold guide", align: "Align" };
 
   var manifest = null, groups = [], gi = 0, hinge = null, wantStyle = "color", fitMode = false, pixTest = false;
   var manifestUrl = new URLSearchParams(location.search).get("manifest") || "manifest.json";
@@ -163,11 +178,12 @@
     if (m.groups && m.groups.length) return m.groups;
     var by = {}, order = [];
     (m.entries || []).forEach(function (e) {
-      var id = e.kind === "align" ? "align" : e.scene;
-      if (!by[id]) { by[id] = { id: id, title: id === "align" ? "Align" : id, kind: e.kind, items: [] }; order.push(id); }
-      by[id].items.push({ file: e.file, hinge: e.hinge, style: e.kind === "align" ? "align" : e.style });
+      var guideCard = GUIDE_KINDS.indexOf(e.kind) >= 0, id = guideCard ? e.kind : e.scene;
+      if (!by[id]) { by[id] = { id: id, title: GUIDE_TITLE[id] || id, kind: guideCard ? e.kind : "scene", items: [] }; order.push(id); }
+      by[id].items.push({ file: e.file, hinge: e.hinge, style: guideCard ? e.kind : e.style });
     });
-    order.sort(function (a, b) { return (a === "align" ? -1 : 0) - (b === "align" ? -1 : 0); });
+    var rank = function (id) { var k = GUIDE_KINDS.indexOf(id); return k >= 0 ? k : GUIDE_KINDS.length; };
+    order.sort(function (a, b) { return rank(a) - rank(b); });
     return order.map(function (id) { return by[id]; });
   }
   function hingesOf(g) {
@@ -421,9 +437,12 @@
     var title = $("title");
     title.firstChild.nodeValue = g.title + " · " + hinge + "° ";
     title.lastChild.textContent = it.style === "align" ? "alignment card" : (STYLE_NAME[it.style] || it.style);
-    $("instr").textContent = it.style === "align"
+    $("instr").textContent = it.style === "fold"
+      ? "Fold the phone like a book until the picture looks flat: straight frame, square checks, round face. Tall in the middle: fold more. Pinched in the middle: open up."
+      : it.style === "align"
       ? "Fold the phone to " + hinge + "°. Move until all lines run straight across the hinge and both halves look equally wide."
       : "Fold to " + hinge + "°, eyes ~30 cm, centred. Cross your eyes until the two top dots become three, then look down.";
+    updateGuideUi(it);
     var hs = hingesOf(g), k = hs.indexOf(hinge);
     $("bPrev").disabled = k <= 0; $("bNext").disabled = k >= hs.length - 1;
     var hp = $("hingePills"); hp.innerHTML = "";
@@ -452,7 +471,56 @@
     if (k < 0 || k >= hs.length) return;
     hinge = hs[k]; show();
   }
+  // ---------------------------------------------------------- setup guide
+  // Four steps: unfold -> fold until the fold-guide picture looks flat -> centre on the
+  // alignment card -> fuse the dots on a 3D picture. Each step shows the matching card at
+  // the chosen angle; the text lives in the bottom bar, so a tap hides it to see the picture.
+  var guide = null;   // { step: 1..4 } while the guide runs
+  var GUIDE_STEPS = [
+    { kind: "fold", title: "Unfold", text: function () {
+        return window.innerWidth > window.innerHeight
+          ? "Open the phone flat and hold it sideways, with the hinge running up and down. The picture looks stretched for now: that is intended. Pick an angle above (" + hinge + "\u00b0 is selected), then tap Next."
+          : "Turn the phone sideways (landscape), opened flat, with the hinge running up and down."; } },
+    { kind: "fold", title: "Fold", text: function () {
+        return "Slowly fold the phone like a book, both sides towards you, until the picture looks flat: straight frame, square checks, round face. " +
+          "Tall in the middle: fold more. Pinched in the middle: open up. Tap the picture to hide this bar and look."; } },
+    { kind: "align", title: "Centre", text: function (cm) {
+        return "Keep that fold. Hold the phone about " + cm + " cm away, your nose in line with the hinge and your eyes level with the blue line across the middle. " +
+          "Both halves should look equally wide and every line straight."; } },
+    { kind: "scene", title: "See it in 3D", text: function () {
+        return "Cross your eyes slightly until the two white dots at the top become three. Keep the middle dot steady, then look down: the 3D shape appears after a few seconds. " +
+          "Tap the picture to hide this bar."; } }
+  ];
+  function groupKind(g) { return g.kind && g.kind !== "stereogram" ? g.kind : (GUIDE_KINDS.indexOf(g.id) >= 0 ? g.id : "scene"); }
+  function groupIndexByKind(kind) { for (var k = 0; k < groups.length; k++) if (groupKind(groups[k]) === kind) return k; return -1; }
+  function hasGuide() { return groupIndexByKind("fold") >= 0; }
+  function guideGo(step) {
+    guide = { step: Math.max(1, Math.min(GUIDE_STEPS.length, step)) };
+    var k = groupIndexByKind(GUIDE_STEPS[guide.step - 1].kind);
+    if (k >= 0) { gi = k; hinge = nearestHinge(groups[gi], hinge); }
+    if (guide.step === GUIDE_STEPS.length && STYLE_ORDER.indexOf(wantStyle) < 2) wantStyle = "color";
+    closeSheets(); setPixTest(false);
+    document.body.classList.add("guiding"); toggleOverlay(true); show();
+  }
+  function endGuide(hideBar) {
+    guide = null; document.body.classList.remove("guiding");
+    try { localStorage.setItem("duovision.guideDone", "1"); } catch (e) {}
+    if (hideBar) toggleOverlay(false);
+    show();
+  }
+  function updateGuideUi(it) {
+    if (!guide) return;
+    var st = GUIDE_STEPS[guide.step - 1], e = entryFor(it.file);
+    var cm = Math.round(((e && e.params && e.params.distance) || 300) / 10);
+    $("guideStep").textContent = "Step " + guide.step + " of " + GUIDE_STEPS.length;
+    $("guideTitle").textContent = st.title;
+    $("guideText").textContent = st.text(cm);
+    $("bGuideBack").disabled = guide.step === 1;
+    $("bGuideNext").innerHTML = guide.step === GUIDE_STEPS.length ? "Done &#10003;" : "Next &#9654;";
+  }
+
   function stepGroup(d) {
+    if (guide) return;                  // the guide decides which card is shown
     var n = groups.length; if (!n) return;
     gi = (gi + d + n) % n; hinge = nearestHinge(groups[gi], hinge); show();
   }
@@ -475,9 +543,9 @@
       var p = document.createElement("div"); p.className = "pills";
       hingesOf(g).forEach(function (x) {
         var b = document.createElement("button");
-        var st = stylesAt(g, x).filter(function (s) { return s !== "color" && s !== "align"; });
+        var st = stylesAt(g, x).filter(function (s) { return s !== "color" && GUIDE_KINDS.indexOf(s) < 0; });
         b.textContent = x + "°" + (st.length ? " +" : "");
-        b.onclick = function () { gi = k; hinge = x; closeSheets(); setPixTest(false); show(); };
+        b.onclick = function () { guide = null; document.body.classList.remove("guiding"); gi = k; hinge = x; closeSheets(); setPixTest(false); show(); };
         p.appendChild(b);
       });
       d.appendChild(p); root.appendChild(d);
@@ -603,6 +671,10 @@
   $("bNext").onclick = function () { stepHinge(1); };
   $("bFit").onclick = function () { fitMode = !fitMode; layout(); show(); };
   $("bFull").onclick = toggleFullscreen;
+  $("bGuide").onclick = function () { guideGo(1); };
+  $("bGuideBack").onclick = function () { guideGo(guide.step - 1); };
+  $("bGuideNext").onclick = function () { if (guide.step >= GUIDE_STEPS.length) endGuide(true); else guideGo(guide.step + 1); };
+  $("bGuideExit").onclick = function () { endGuide(false); };
   $("bNudgeL").onclick = function () { nudge(-0.5); };
   $("bNudgeR").onclick = function () { nudge(0.5); };
   $("bNudge0").onclick = function () { nudge(null); };
@@ -617,7 +689,10 @@
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { $("bCopy").textContent = "Copied"; });
     else { var r = document.createRange(); r.selectNodeContents($("diagText")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); }
   };
-  function onResize() { layout(); if (pixTest) setPixTest(true); if ($("diag").classList.contains("open")) diagnostics(); }
+  function onResize() {
+    layout(); if (pixTest) setPixTest(true); if ($("diag").classList.contains("open")) diagnostics();
+    var it = guide && current(); if (it) updateGuideUi(it);   // step 1 reacts to rotating the phone
+  }
   window.addEventListener("resize", onResize);
   document.addEventListener("fullscreenchange", onResize);
   document.addEventListener("webkitfullscreenchange", onResize);
@@ -645,7 +720,10 @@
     if (!groups.length) throw new Error("manifest has no images");
     var hadHash = !!location.hash;
     buildMenu(); restoreFromHash(); show(); toggleOverlay(true);
-    if (!hadHash) openMenu();
+    $("bGuide").parentNode.style.display = hasGuide() ? "" : "none";
+    var guideDone = false;
+    try { guideDone = localStorage.getItem("duovision.guideDone") === "1"; } catch (e) {}
+    if (!hadHash) { if (hasGuide() && !guideDone) guideGo(1); else openMenu(); }
   }).catch(function (err) {
     msg.innerHTML = "Could not load <b>" + manifestUrl + "</b> (" + String(err.message || err) +
       ").<br>Serve this folder over http(s) with manifest.json and the PNGs next to index.html " +

@@ -14,6 +14,12 @@ for one hinge angle and one fixed viewpoint.  These guides help them match it:
   line runs straight across the hinge; a wrong fold angle kinks the
   horizontal lines at the hinge, an off-centre head makes the halves look
   unequally wide.
+* ``fold_guide_image``: an anamorphic picture (frame, checkerboard bands,
+  round face, "FOLD / 120°") for finding the fold angle by eye.  The flat
+  picture is pre-distorted so that it only looks right (straight frame, square
+  checks, round face) from the design viewpoint when the phone is folded to
+  the encoded hinge angle: flatter than that it looks tall in the middle,
+  folded further it looks pinched in the middle.
 
 Everything is vectorised numpy; text is rendered with Pillow.
 """
@@ -53,6 +59,20 @@ ALIGN_INSTRUCTIONS = (
     "Fold until the lines run straight across the hinge;",
     "centre until both halves look equally wide.",
 )
+FOLD_INSTRUCTIONS = (
+    "Fold until the picture looks flat: straight frame, round face.",
+    "Tall in the middle: fold more · pinched in the middle: open up.",
+)
+FOLD_SAFE_WIDTH_FRAC = 0.78      # iOS hides ~9% of the Duo's inner display behind its status strip on
+                                 # one side (the viewer mirrors it on the other): keep the frame inside
+FOLD_MARGIN_MM = 6.0             # background kept around the picture frame in the target bitmap
+FOLD_TARGET_OVERSAMPLE = 1.5     # target bitmap pixels per display pixel
+FOLD_BG = (6, 6, 10)
+FOLD_FRAME = (255, 255, 255)
+FOLD_PAPER = (14, 22, 42)
+FOLD_CHECK = (36, 74, 150)
+FOLD_FACE = (255, 204, 64)
+FOLD_INK = (40, 30, 10)
 
 
 # --------------------------------------------------------------------- fonts
@@ -287,12 +307,9 @@ def _line_cov(f, gnorm, half_w_px):
     return np.clip(half_w_px + 0.5 - d, 0.0, 1.0)
 
 
-def alignment_figure_half_size(geom: FoldGeometry, view: ViewProfile) -> float:
-    """Half side (mm, in the reference plane) of the alignment square.
-
-    Nominally 50 mm (a 100 mm square); shrunk in 5 mm steps so the whole square
-    is visible below the guide band and inside the side edges.
-    """
+def _plane_limits(geom: FoldGeometry, view: ViewProfile) -> Tuple[float, float, float]:
+    """How far (mm, in the reference plane, from the cyclopean axis) a figure can
+    extend up, down and sideways and still be drawn on the display below the band."""
     dev = geom.device
     e = view.cyclopean_eye()
     z_p = _guide_z(view)
@@ -308,6 +325,16 @@ def alignment_figure_half_size(geom: FoldGeometry, view: ViewProfile) -> float:
     xe = geom.half_width_mm * geom.s
     ze = geom.half_width_mm * geom.c
     side = (xe - 3.0 * geom.mm_per_px) * (e[2] - z_p) / (e[2] - ze) - abs(e[0])
+    return float(up), float(down), float(side)
+
+
+def alignment_figure_half_size(geom: FoldGeometry, view: ViewProfile) -> float:
+    """Half side (mm, in the reference plane) of the alignment square.
+
+    Nominally 50 mm (a 100 mm square); shrunk in 5 mm steps so the whole square
+    is visible below the guide band and inside the side edges.
+    """
+    up, down, side = _plane_limits(geom, view)
     lim = min(up, down, side) - 2.0
     half = min(50.0, math.floor(lim / 5.0) * 5.0)
     return max(half, 5.0)
@@ -390,6 +417,134 @@ def alignment_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> n
     left_lines = [f"{head} · fold {geom.hinge_deg:g}°",
                   f"eyes {dist_cm:g} cm, centred, level with hinge middle · {mode}"]
     band = _render_band(geom, view, left_lines, list(ALIGN_INSTRUCTIONS))
+    out[:nb] = band[..., None]
+    return out
+
+
+# ----------------------------------------------------------------- fold guide
+def fold_guide_extent(geom: FoldGeometry, view: ViewProfile) -> Tuple[float, float]:
+    """(half_w, half_h) of the fold-guide picture frame, mm in the reference plane,
+    centred on the cyclopean axis; the largest frame that fits below the band."""
+    up, down, _side = _plane_limits(geom, view)
+    half_h = max(8.0, min(up, down) - 2.0)
+    # Side limit: the frame stays inside the central FOLD_SAFE_WIDTH_FRAC of the display width.
+    e = view.cyclopean_eye()
+    z_p = _guide_z(view)
+    u = FOLD_SAFE_WIDTH_FRAC * geom.half_width_mm
+    side = u * geom.s * (e[2] - z_p) / (e[2] - u * geom.c) - abs(e[0])
+    half_w = max(8.0, min(side, 1.7 * half_h))
+    return float(half_w), float(half_h)
+
+
+def fold_guide_target(half_w: float, half_h: float, px_per_mm: float, hinge_deg: float) -> np.ndarray:
+    """The undistorted fold-guide picture, (h, w, 3) uint8.
+
+    Covers x in [-half_w - m, half_w + m], y in [-half_h - m, half_h + m] mm
+    (m = FOLD_MARGIN_MM; row 0 is the top, +y up) at `px_per_mm`.  Bitmap pixel
+    (col, row) is centred at x = (col + 0.5) / px_per_mm - half_w - m,
+    y = half_h + m - (row + 0.5) / px_per_mm.
+
+    White frame, two-row checkerboard bands along the top and bottom (a square
+    boundary on the hinge), a round face in a white ring on the hinge, "FOLD"
+    on the left and the angle on the right.  Straight edges crossing the hinge
+    far from eye level and a circle on the hinge are the shapes whose
+    distortion shows a wrong fold angle most clearly.
+    """
+    m = FOLD_MARGIN_MM
+    ss = 2                                       # supersampling for anti-aliasing
+    w = max(8, int(math.ceil((2 * half_w + 2 * m) * px_per_mm)))
+    h = max(8, int(math.ceil((2 * half_h + 2 * m) * px_per_mm)))
+    k = px_per_mm * ss
+    img = Image.new("RGB", (w * ss, h * ss), FOLD_BG)
+    d = ImageDraw.Draw(img)
+
+    def X(x):
+        return (x + half_w + m) * k
+
+    def Y(y):
+        return (half_h + m - y) * k
+
+    def rect(x0, y0, x1, y1, fill):              # mm, any corner order
+        d.rectangle([X(min(x0, x1)), Y(max(y0, y1)), X(max(x0, x1)) - 1, Y(min(y0, y1)) - 1], fill=fill)
+
+    def disc(cx, cy, rx, ry, fill):
+        d.ellipse([X(cx - rx), Y(cy + ry), X(cx + rx), Y(cy - ry)], fill=fill)
+
+    t = min(1.8, 0.08 * half_h)                  # frame thickness
+    rect(-half_w, -half_h, half_w, half_h, FOLD_FRAME)
+    rect(-half_w + t, -half_h + t, half_w - t, half_h - t, FOLD_PAPER)
+
+    # Checkerboard bands: two rows of squares, a boundary on the hinge (x = 0).
+    xi = half_w - t
+    n = max(1, int(round(xi / min(6.0, max(1.5, 0.14 * half_h)))))
+    q = xi / n                                   # a whole number of squares on each side of the hinge
+    for band_top in (half_h - t, -half_h + t + 2 * q):
+        for r in range(2):
+            y1 = band_top - r * q
+            for c in range(-n, n):
+                x0, x1 = max(c * q, -xi), min((c + 1) * q, xi)
+                if x1 <= x0:
+                    continue
+                rect(x0, y1 - q, x1, y1, FOLD_FRAME if (c + r) % 2 == 0 else FOLD_CHECK)
+
+    # Round face in a white ring, centred on the hinge at eye level.
+    free = half_h - t - 2 * q                    # half height left between the bands
+    ring = 0.88 * free
+    face = ring - min(2.4, 0.12 * ring)
+    disc(0, 0, ring, ring, FOLD_FRAME)
+    disc(0, 0, ring - min(1.0, 0.05 * ring), ring - min(1.0, 0.05 * ring), FOLD_PAPER)
+    disc(0, 0, face, face, FOLD_FACE)
+    for sx in (-1, 1):
+        disc(sx * 0.36 * face, 0.26 * face, 0.10 * face, 0.16 * face, FOLD_INK)
+    sm = 0.60 * face
+    d.arc([X(-sm), Y(sm), X(sm), Y(-sm)], 25, 155, fill=FOLD_INK, width=max(1, int(round(0.09 * face * k))))
+
+    # "FOLD" on the left half, the angle on the right half.
+    room = xi - ring - 0.12 * xi                 # width available on each side of the face
+    if room > 4.0:
+        words = ("FOLD", f"{hinge_deg:g}°")
+        font = _fit_font(words, int(round(0.62 * free * k)), room * k)
+        asc, desc = font.getmetrics()
+        for word, sx in zip(words, (-1, 1)):
+            tw = _text_width(word, font)
+            cx = sx * (ring + (xi - ring) / 2.0)
+            d.text((X(cx) - tw / 2.0, Y(0) - (asc + desc) / 2.0), word, fill=FOLD_FRAME, font=font)
+
+    img = img.resize((w, h), Image.LANCZOS)
+    return np.asarray(img, dtype=np.uint8)
+
+
+def fold_guide_image(geom: FoldGeometry, view: ViewProfile, label: str = "") -> np.ndarray:
+    """Fold-angle guide (H, W, 3) uint8: a picture that only looks right when folded.
+
+    The picture of ``fold_guide_target`` lies in the frontal plane
+    z = z_background.  Every display pixel shows the colour of the plane point
+    its cyclopean ray passes through (bilinear), so from the design viewpoint at
+    the encoded hinge angle the picture looks flat and undistorted.  Shown on a
+    flatter display it looks tall in the middle (fold more); folded too far it
+    looks pinched in the middle (open up).  The band carries the instructions.
+    """
+    from scipy import ndimage
+
+    dev = geom.device
+    h, w = dev.height_px, dev.width_px
+    qx, qy = _plane_coords(geom, view)
+    half_w, half_h = fold_guide_extent(geom, view)
+    ppm = FOLD_TARGET_OVERSAMPLE / dev.mm_per_px
+    target = fold_guide_target(half_w, half_h, ppm, geom.hinge_deg)
+    cols = (qx + half_w + FOLD_MARGIN_MM) * ppm - 0.5
+    rows = (half_h + FOLD_MARGIN_MM - qy) * ppm - 0.5
+    out = np.empty((h, w, 3), dtype=np.uint8)
+    for c in range(3):
+        ch = ndimage.map_coordinates(target[..., c].astype(np.float32), [rows, cols], order=1, mode="nearest")
+        out[..., c] = np.clip(np.rint(ch), 0, 255).astype(np.uint8)
+
+    nb = guide_band_rows(dev)
+    dist_cm = view.distance_mm / 10.0
+    head = label or "DuoVision fold guide"
+    left_lines = [f"{head} · fold {geom.hinge_deg:g}°",
+                  f"eyes {dist_cm:g} cm, centred, level with hinge middle"]
+    band = _render_band(geom, view, left_lines, list(FOLD_INSTRUCTIONS), dots=False)
     out[:nb] = band[..., None]
     return out
 
