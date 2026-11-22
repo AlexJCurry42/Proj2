@@ -219,6 +219,7 @@ def test_viewer_html_well_formed():
     assert "displayMismatch" in p.script and "navigator.standalone === true" in p.script
     # iPhone Duo: works alongside the iOS status strip (hinge on the fold, panel scale, nudge).
     assert "panelLayout" in p.script and "nudgeMm" in p.script and 'id="mask"' in html
+    assert "DUO_PANEL_PT = [951, 669]" in p.script and "flipBand" in p.script
     # Self-contained: no external scripts/styles.
     assert not any(u.startswith(("http:", "https:", "//")) for u in p.urls), p.urls
     assert "<script src" not in html

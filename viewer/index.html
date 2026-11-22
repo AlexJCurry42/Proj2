@@ -92,6 +92,7 @@
     <button id="bNudgeR" aria-label="Move picture right">0.5 mm &#9654;</button>
     <button id="bNudge0">Reset</button>
     <span class="hint">Status strip</span><button id="bSide">right</button>
+    <span class="hint" id="bandLbl">Bar</span><button id="bBand">bottom</button>
     <button id="bMask">Mirror strip: on</button></div>
 </div>
 <div class="overlay" id="bottom">
@@ -291,12 +292,13 @@
   // height (its physical size in mm is then right, since the picture has the panel's shape),
   // anchor it at the window edge away from the strip, and the hinge column lands on the fold.
   // A per-orientation "strip side" and a fine nudge in mm handle what the page cannot detect.
-  var prefs = { side: {}, nudgeMm: {}, mask: true };
+  var prefs = { side: {}, band: {}, nudgeMm: {}, mask: true };
   try {   // stored by this page only, but never trust its shape: bad values fall back to defaults
     var sp0 = JSON.parse(localStorage.getItem("duovision.panel") || "null");
     var isObj = function (o) { return !!o && typeof o === "object" && !Array.isArray(o); };
     if (isObj(sp0)) {
       if (isObj(sp0.side)) Object.keys(sp0.side).forEach(function (k) { if (sp0.side[k] === "left" || sp0.side[k] === "right") prefs.side[k] = sp0.side[k]; });
+      if (isObj(sp0.band)) Object.keys(sp0.band).forEach(function (k) { if (sp0.band[k] === "top" || sp0.band[k] === "bottom") prefs.band[k] = sp0.band[k]; });
       if (isObj(sp0.nudgeMm)) Object.keys(sp0.nudgeMm).forEach(function (k) {
         var v = Number(sp0.nudgeMm[k]); if (isFinite(v) && Math.abs(v) <= 30) prefs.nudgeMm[k] = v; });
       if (typeof sp0.mask === "boolean") prefs.mask = sp0.mask;
@@ -310,7 +312,8 @@
     return t ? t + (typeof a === "number" ? "@" + a : "") : land;
   }
   function ppi() { var d = manifest && manifest.device; return (d && d.ppi) || 430; }
-  function panelLayout() {   // null unless the window is a landscape slice of a panel shaped like the picture
+  var DUO_PANEL_PT = [951, 669];   // iPhone Duo inner display, landscape, CSS px (pt)
+  function panelLayout() {   // null unless this is the iPhone Duo inner display, landscape, home-screen app
     var nw = img.naturalWidth, nh = img.naturalHeight, iw = window.innerWidth, ih = window.innerHeight;
     if (!nw || fitMode || iw <= ih || nw <= nh) return null;
     // Only the iPhone Duo inner display: an iOS home-screen app (navigator.standalone) whose window is
@@ -319,13 +322,21 @@
     if (navigator.standalone !== true) return null;
     var sc = [screen.width, screen.height].sort(function (a, b) { return a - b; });
     if (!(Math.max(iw, ih) > sc[1] + 1 || Math.min(iw, ih) > sc[0] + 1)) return null;
-    var k = ih / nh, panelW = nw * k, strip = panelW - iw;   // CSS px per image px; widths in CSS px
-    if (strip < 4 || strip > 0.25 * panelW) return null;      // fits already, or not a status strip
-    var key = orientKey(), side = prefs.side[key] === "left" ? "left" : "right", nudge = Number(prefs.nudgeMm[key]) || 0;
+    // The panel is a fixed size: the inner display is 951 x 669 pt in landscape (Apple's screenshot
+    // size 2853 x 2007 at 3x). Do not infer it from the window: iOS gives the web app different
+    // windows from launch to launch (867 x 669, or 867 x 587 with an 82 pt band reserved), so the
+    // window is only a slice of the panel: status strip on one side, sometimes a band top or bottom.
+    var panelW = DUO_PANEL_PT[0], panelH = DUO_PANEL_PT[1];
+    if (iw > panelW + 1 || ih > panelH + 1) return null;      // not this panel
+    var k = panelH / nh;                                       // CSS px per image px (true size in mm)
+    var strip = panelW - iw, band = panelH - ih;               // reserved by iOS, in CSS px
+    var key = orientKey(), side = prefs.side[key] === "left" ? "left" : "right";
+    var bandAt = prefs.band[key] === "top" ? "top" : "bottom", nudge = Number(prefs.nudgeMm[key]) || 0;
     var mmPerCss = 25.4 / ppi() / k;
-    var hinge = (side === "right" ? panelW / 2 : iw - panelW / 2) + nudge / mmPerCss;
-    return { k: k, w: panelW, h: ih, left: hinge - panelW / 2, top: 0, strip: strip, side: side,
-             nudge: nudge, hinge: hinge, mmPerCss: mmPerCss, key: key };
+    var x0 = side === "right" ? 0 : strip, y0 = bandAt === "bottom" ? 0 : band;   // window origin on the panel
+    var hinge = panelW / 2 - x0 + nudge / mmPerCss;
+    return { k: k, w: nw * k, h: nh * k, left: hinge - nw * k / 2, top: -y0, strip: strip, side: side,
+             band: band, bandAt: bandAt, nudge: nudge, hinge: hinge, mmPerCss: mmPerCss, key: key };
   }
   function nudge(dmm) {
     var pl = panelLayout(); if (!pl) return;
@@ -334,6 +345,10 @@
   function flipSide() {
     var pl = panelLayout(); if (!pl) return;
     prefs.side[pl.key] = pl.side === "right" ? "left" : "right"; savePrefs(); layout();
+  }
+  function flipBand() {
+    var pl = panelLayout(); if (!pl) return;
+    prefs.band[pl.key] = pl.bandAt === "bottom" ? "top" : "bottom"; savePrefs(); layout();
   }
 
   function layout() {
@@ -355,6 +370,8 @@
       }
       $("nudgeVal").textContent = (pl.nudge > 0 ? "+" : "") + pl.nudge.toFixed(1) + " mm";
       $("bSide").textContent = pl.side; $("bMask").textContent = "Mirror strip: " + (prefs.mask ? "on" : "off");
+      $("bBand").style.display = $("bandLbl").style.display = pl.band > 2 ? "" : "none";
+      $("bBand").textContent = pl.bandAt;
     } else if (fitMode) {
       var s = Math.min(window.innerWidth / nw, window.innerHeight / nh);
       w = nw * s; h = nh * s;
@@ -524,8 +541,8 @@
       "CSS size            " + cssW.toFixed(3) + " x " + cssH.toFixed(3) + (fitMode ? "  (FIT mode, scaled)" : pl ? "  (Duo panel scale)" : "  (= natural / dpr)"),
       "drawn device px     " + (cssW * r).toFixed(1) + " x " + (cssH * r).toFixed(1),
       "image offset        " + ((parseFloat(img.style.left) || 0) * r).toFixed(1) + ", " + ((parseFloat(img.style.top) || 0) * r).toFixed(1) + " device px" + (pl ? "" : " (centred on the viewport)"),
-      "layout              " + (pl ? "Duo panel: status strip " + pl.side + " " + pl.strip.toFixed(1) + " CSS px (" + (pl.strip * pl.mmPerCss).toFixed(1) +
-        " mm), panel " + pl.w.toFixed(1) + " x " + pl.h + " CSS px" : (fitMode ? "fit preview" : "1:1 centred")),
+      "layout              " + (pl ? "Duo panel " + DUO_PANEL_PT[0] + " x " + DUO_PANEL_PT[1] + " CSS px: status strip " + pl.side + " " + pl.strip.toFixed(1) +
+        " CSS px (" + (pl.strip * pl.mmPerCss).toFixed(1) + " mm), bar " + pl.bandAt + " " + pl.band.toFixed(1) + " CSS px" : (fitMode ? "fit preview" : "1:1 centred")),
       "panel scale         " + (pl ? pl.k.toFixed(4) + " CSS px per image px, " + pl.mmPerCss.toFixed(4) + " mm per CSS px (" + ppi() + " ppi)" : "-"),
       "hinge               " + (pl ? "CSS x " + pl.hinge.toFixed(1) + " of " + iw + " (window centre " + (iw / 2).toFixed(1) + "), nudge " + pl.nudge.toFixed(1) + " mm" : "-"),
       "fits exactly        " + (exact ? "YES - 1 image pixel = 1 display pixel, full screen"
@@ -590,6 +607,7 @@
   $("bNudgeR").onclick = function () { nudge(0.5); };
   $("bNudge0").onclick = function () { nudge(null); };
   $("bSide").onclick = flipSide;
+  $("bBand").onclick = flipBand;
   $("bMask").onclick = function () { prefs.mask = !prefs.mask; savePrefs(); layout(); };
   $("bFsHelpClose").onclick = closeSheets;
   $("bRefresh").onclick = diagnostics;

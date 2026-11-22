@@ -66,12 +66,15 @@ on one side, and web apps get a window that stops at it: 867 x 669 of the
 and scales them to the 2670 x 1878 panel, so 1:1 physical pixels are not
 possible for any web page there. The viewer works alongside this:
 
-- In the home-screen app, in landscape, it scales the picture to the window
-  height, so its size in mm matches the panel, and anchors it at the window
-  edge away from the strip, so the hinge column sits on the physical fold
-  (CSS x 475.5 of 867, not the window centre).
+- iOS does not always give the web app the same window: 867 x 669 pt, or
+  867 x 587 pt with an extra 82 pt bar reserved at the bottom (or top). So the
+  viewer does not infer the panel from the window. In the home-screen app, in
+  landscape, it scales the picture to the fixed 951 x 669 pt panel (true size
+  in mm) and places it from where the window sits on the panel, so the hinge
+  column is on the physical fold (CSS x 475.5) whatever window iOS gives.
 - **Hinge** controls in the top bar: nudge by 0.5 mm (`[`/`]` by 0.1 mm),
-  reset, choose which side the strip is on, and mirror the strip (hide the
+  reset, choose which side the strip is on, whether the extra bar (when present) is
+  at the bottom or top, and mirror the strip (hide the
   same width on the other side so both eyes get a symmetric frame). Settings
   are remembered per orientation.
 - Check on the **Align** card: the blue vertical line should sit exactly on
