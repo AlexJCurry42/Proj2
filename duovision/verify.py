@@ -445,6 +445,10 @@ def _gray(img):
     return img.astype(np.float32)
 
 
+def _smooth_v(a, ok, sigma):
+    return np.where(ok, ndimage.gaussian_filter1d(a, sigma, axis=0), 0.0).astype(np.float32)
+
+
 def _shift_cols(a, d, fill):
     """out[:, x] = a[:, x - d] (fill outside)."""
     out = np.full_like(a, fill)
@@ -458,7 +462,7 @@ def _shift_cols(a, d, fill):
     return out
 
 
-def _vertical_field(gl, gr, okl, okr, d_lo, d_hi, max_dv, *, patch=48, step=32, min_ncc=0.4):
+def _vertical_field(gl, gr, okl, okr, d_lo, d_hi, max_dv, *, patch=None, step=None, min_ncc=0.4):
     """Smooth vertical-disparity field dv(x, y) = y_right - y_left (pixels) on the
     left retinal grid, from patch-wise 2D normalised cross-correlation (FFT),
     searching horizontal disparities [d_lo, d_hi] and |dv| <= max_dv. Pattern
@@ -466,6 +470,13 @@ def _vertical_field(gl, gr, okl, okr, d_lo, d_hi, max_dv, *, patch=48, step=32, 
     wins. Returns (field (h, w) float32, grid of raw estimates)."""
     from scipy.signal import correlate
     h, w = gl.shape
+    # patch / step scale with the retinal width (64 / 16 px at 400 px wide):
+    # the field is a smooth function of position on the display, so it should be
+    # sampled at the same angular spacing whatever the retinal resolution.
+    if patch is None:
+        patch = 2 * max(16, int(round(32 * w / 400.0)))
+    if step is None:
+        step = max(8, int(round(16 * w / 400.0)))
     V = int(math.ceil(max_dv))
     half = patch // 2
     ys = np.arange(half + V, h - half - V, step)
@@ -527,7 +538,8 @@ def reconstruct_depth(image, geom: FoldGeometry, view, *, head_offset=(0.0, 0.0,
                       min_score: float = 0.5, tie_tol: float = 0.2, lr_tol: float = 1.0, z_band=None,
                       reserved_rows=None, exclude_display_px: float = 2.0,
                       margin: float = 0.06, vertical_compensation: bool = True,
-                      max_vertical_arcmin: float = 8.0) -> dict:
+                      max_vertical_arcmin: float = 8.0, field_smooth_px: float = 0.7,
+                      match_vsmooth_px: float = 0.5) -> dict:
     """Simulated viewer: stereo-match what the two eyes see, triangulate.
 
     Eyes = view.eyes(head_offset). res=None uses default_res(device):
@@ -555,6 +567,13 @@ def reconstruct_depth(image, geom: FoldGeometry, view, *, head_offset=(0.0, 0.0,
     check (same rule on the right image) agrees within lr_tol px, and the eye's
     pixel sees the display outside the guide band (the ZNCC window must lie
     entirely on usable display in both eyes).
+
+    Vertical compensation (vertical_compensation=True): a smooth vertical-
+    disparity field (|dv| <= max_vertical_arcmin) is estimated by patch-wise 2D
+    ZNCC on Gaussian-prefiltered views (field_smooth_px; patch and step scale
+    with the retinal width). If it reaches 0.25 px the right view is resampled
+    by it and both views get a vertical-only Gaussian (match_vsmooth_px) before
+    the horizontal search; otherwise the views are matched unfiltered.
 
     Returns dict with disparity (image disparity, NaN invalid), valid, score,
     x, y, z (world, on the left-eye retinal grid, NaN invalid), sees_display
@@ -628,7 +647,15 @@ def reconstruct_depth(image, geom: FoldGeometry, view, *, head_offset=(0.0, 0.0,
     max_dv = max_vertical_arcmin / 60.0 * math.pi / 180.0 * f
     dv_field = None
     if vertical_compensation and max_dv >= 0.5:
-        dv_field, _ = _vertical_field(gl, gr, good_l, good_r, d_lo, d_hi, max_dv)
+        # The field is estimated on a Gaussian-prefiltered copy (field_smooth_px,
+        # retinal px): the dot pattern is barely resolved (one retinal pixel is
+        # ~1.8 display pixels), so the vertical ZNCC peak is too sharp for a
+        # parabola and sub-pixel estimates lock to whole pixels without it.
+        sl, sr = gl, gr
+        if field_smooth_px > 0:
+            sl = np.where(good_l, ndimage.gaussian_filter(gl, field_smooth_px), 0.0).astype(np.float32)
+            sr = np.where(good_r, ndimage.gaussian_filter(gr, field_smooth_px), 0.0).astype(np.float32)
+        dv_field, _ = _vertical_field(sl, sr, good_l, good_r, d_lo, d_hi, max_dv)
         if np.abs(dv_field).max() >= 0.25:
             rows_w = np.arange(h, dtype=np.float32)[:, None] + dv_field
             cols_w = np.broadcast_to(np.arange(w, dtype=np.float32)[None, :], (h, w))
@@ -636,6 +663,13 @@ def reconstruct_depth(image, geom: FoldGeometry, view, *, head_offset=(0.0, 0.0,
             good_r = ndimage.map_coordinates(good_r.astype(np.float32), [rows_w, cols_w], order=1,
                                              mode="constant") > 0.999
             gr = np.where(good_r, gr, 0.0).astype(np.float32)
+            # Bilinear resampling blurred the right view vertically by a varying
+            # sub-pixel amount; blur both views vertically by the same small
+            # sigma so ZNCC compares like with like. Vertical only: horizontal
+            # sharpness is what tells pattern repeats (disparities) apart.
+            if match_vsmooth_px > 0:
+                gl = _smooth_v(gl, good_l, match_vsmooth_px)
+                gr = _smooth_v(gr, good_r, match_vsmooth_px)
     uf = lambda a: ndimage.uniform_filter(a, size=window, mode="constant")  # noqa: E731
     mL = uf(gl)
     vL = uf(gl * gl) - mL * mL
