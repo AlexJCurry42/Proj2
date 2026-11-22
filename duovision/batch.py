@@ -396,12 +396,16 @@ def run_batch(out_dir, jobs: list[Job], *, n_jobs: int | None = None, force: boo
     return manifest
 
 
+VIEWER_FILES = ("index.html", "app.webmanifest", "icon-192.png", "icon-512.png")
+
+
 def copy_viewer_files(out_dir) -> list[str]:
-    """Copy viewer/index.html next to the images so the folder is self-contained."""
+    """Copy the viewer (index.html, web-app manifest, icons) next to the images so the
+    folder is self-contained and installable as a full-screen home-screen app."""
     import shutil
     src = Path(__file__).resolve().parent.parent / "viewer"
     copied = []
-    for name in ("index.html",):
+    for name in VIEWER_FILES:
         s = src / name
         if s.exists():
             shutil.copyfile(s, Path(out_dir) / name)

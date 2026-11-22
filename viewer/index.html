@@ -9,7 +9,9 @@
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#000000">
 <title>DuoVision viewer</title>
-<link rel="icon" href="data:,">
+<link rel="manifest" href="app.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
   :root { --fg: #d8dbe2; --dim: #8a90a0; --panel: rgba(18, 20, 26, 0.92); --line: #2c3040; --accent: #5fd0ff; }
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; color: var(--fg);
@@ -105,14 +107,19 @@
   <h2>Full screen</h2>
   <p id="fsHelpWhy" class="hint"></p>
   <p>The 3D picture only works when it fills the <b>whole</b> display at 1 image pixel = 1 display pixel,
-    so that the middle of the picture sits exactly on the hinge. Safari's address bar and toolbar take part of
+    so that the middle of the picture sits exactly on the hinge. Browser and system bars take part of
     the screen, which crops the picture and shifts it off the hinge.</p>
-  <p>On iPhone, Safari cannot make a web page full screen. Instead:</p>
+  <h3>Chrome</h3>
   <ol>
-    <li>In Safari tap <b>Share</b> &rarr; <b>Add to Home Screen</b> &rarr; <b>Add</b>.</li>
-    <li>Open DuoVision from the new home-screen icon. It runs with no Safari bars at all.</li>
-    <li>Hold the phone in landscape and check <b>Info</b>: &ldquo;viewport covers screen&rdquo; and &ldquo;fits exactly&rdquo; should both say YES.</li>
+    <li>If you added DuoVision to the home screen before, delete that icon first: it is an old shortcut that opens inside the browser.</li>
+    <li>Open the site in Chrome, tap the <b>&#8942;</b> menu &rarr; <b>Install app</b> (or <b>Add to Home screen</b> &rarr; <b>Install</b>).</li>
+    <li>Launch DuoVision from the new icon. It opens full screen in landscape with no browser or system bars. If bars still show, tap the picture once.</li>
   </ol>
+  <h3>iPhone (Safari or Chrome)</h3>
+  <ol>
+    <li>Tap <b>Share</b> &rarr; <b>Add to Home Screen</b> &rarr; <b>Add</b>, then launch DuoVision from the new icon.</li>
+  </ol>
+  <p>Then hold the phone in landscape and check <b>Info</b>: &ldquo;viewport covers&rdquo; and &ldquo;fits exactly&rdquo; should both say YES.</p>
 </div>
 
 <div class="sheet" id="diag">
@@ -213,7 +220,9 @@
     var ex = document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen;
     if (ex) { try { var p = ex.call(document); if (p && p.catch) p.catch(function () {}); } catch (e) {} }
   }
-  function toggleFullscreen() { if (fsActive()) exitFullscreen(); else enterFullscreen(); }
+  var userLeftFs = false;   // after the user exits full screen on purpose, taps go back to showing the bar
+  function toggleFullscreen() { if (fsActive()) { userLeftFs = true; exitFullscreen(); } else enterFullscreen(); }
+  function wantsAutoFullscreen() { return fsSupported() && !fsActive() && !userLeftFs && !fitMode && !coversScreen(); }
   function openFsHelp(err) {
     closeSheets();
     $("fsHelpWhy").textContent = fsSupported()
@@ -233,7 +242,8 @@
     } else if (!full) {
       var v = viewportDevPx(), s = screenDevPx();
       t.textContent = "Not full screen (page " + v[0] + "\u00d7" + v[1] + " of " + Math.max(s[0], s[1]) + "\u00d7" +
-        Math.min(s[0], s[1]) + " device px): the picture is cropped and cannot line up with the hinge. Tap \u201cFull screen\u201d.";
+        Math.min(s[0], s[1]) + " device px): the picture is cropped and cannot line up with the hinge. " +
+        (fsSupported() ? "Tap the picture or \u201cFull screen\u201d." : "Tap \u201cFull screen\u201d for how to fix it.");
       w.classList.add("on");
     } else w.classList.remove("on");
   }
@@ -433,7 +443,10 @@
     var dx = ev.clientX - p0.x, dy = ev.clientY - p0.y, dt = Date.now() - p0.t; p0 = null;
     if (pixTest) { setPixTest(false); show(); return; }
     var ax = Math.abs(dx), ay = Math.abs(dy);
-    if (Math.max(ax, ay) < 12) { if (dt < 450) toggleOverlay(); return; }   // tap (long-press -> save menu)
+    if (Math.max(ax, ay) < 12) {                                              // tap (long-press -> save menu)
+      if (dt < 450) { if (wantsAutoFullscreen()) enterFullscreen(); else toggleOverlay(); }
+      return;
+    }
     if (ax > 50 && ax > 1.5 * ay) stepHinge(dx < 0 ? 1 : -1);               // swipe left = larger angle
     else if (ay > 50 && ay > 1.5 * ax) stepGroup(dy < 0 ? 1 : -1);
   });

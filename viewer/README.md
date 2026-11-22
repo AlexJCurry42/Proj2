@@ -11,10 +11,10 @@ covers the **whole** display; see *Full screen* below.
 ## Make the folder
 
 ```sh
-python -m duovision batch --out out/batch      # PNGs + manifest.json + a copy of index.html
+python -m duovision batch --out out/batch      # PNGs + manifest.json + the viewer files
 ```
 
-The batch command copies `viewer/index.html` into the output folder, so
+The batch command copies the viewer (`index.html`, `app.webmanifest`, icons) into the output folder, so
 `out/batch/` is all you need to host (`--no-viewer` skips the copy; you can
 also copy it by hand). A different manifest can be chosen with
 `index.html?manifest=path/to/manifest.json` (images are resolved relative to it).
@@ -24,7 +24,7 @@ also copy it by hand). A different manifest can be chosen with
 **Easiest: the hosted site.** `.github/workflows/pages.yml` renders the full
 batch and publishes it with this viewer on GitHub Pages on every push to `main`
 (or on demand: Actions -> Pages -> Run workflow). Open
-`https://alexjcurry42.github.io/Proj2/` in Safari on the Duo; nothing to install.
+`https://alexjcurry42.github.io/Proj2/` in Chrome (or Safari) on the Duo.
 One-time setup: repo Settings -> Pages -> Source: **GitHub Actions**.
 
 Any other static host works too; the page only needs HTTP(S) because browsers
@@ -42,11 +42,19 @@ browser bars take part of the screen, the picture is cropped and its hinge
 column cannot sit on the physical hinge. (The old fit toggle scaled the picture
 to the window, which breaks the projection; it is now only a labelled preview.)
 
-- **Full screen** button (or `f`): uses the browser's real Fullscreen API
-  (desktop browsers, Android, iPad) and stays at 1:1 pixels.
-- **iPhone Safari** has no full-screen mode for web pages, so the button opens
-  instructions instead: Share -> **Add to Home Screen**, then launch DuoVision
-  from the home-screen icon. It then runs with no Safari bars at all.
+- **Install it as an app (best).** `app.webmanifest` asks for a full-screen,
+  landscape launch with no browser or system bars.
+  - **Chrome:** open the site, tap the menu -> **Install app** (or **Add to Home
+    screen** -> **Install**), and launch from the new icon. An icon added before
+    the manifest existed is a plain shortcut that opens inside the browser:
+    delete it and install again.
+  - **iPhone:** Share -> **Add to Home Screen**, then launch from the icon.
+- **Tap to go full screen:** while the page does not cover the display, the
+  first tap on the picture requests real full screen (Fullscreen API, system
+  bars hidden), as does the **Full screen** button or `f`. It always stays at
+  1:1 pixels. After you leave full screen on purpose, taps show the bar again.
+- Where the browser has no Fullscreen API (iPhone), the button explains how to
+  install the app instead.
 - While the page does not cover the whole display, the bottom bar shows a
   yellow "Not full screen" warning with the page and screen sizes.
 
