@@ -379,30 +379,25 @@
   var cache = {};
 
   // --------------------------------------------------------------- theme
-  // Light (white) or dark (black), one blue accent. Follows the system until the switch in
-  // Settings is used; the choice is then remembered.
-  var theme = null;
-  try { var t0 = localStorage.getItem("duovision.theme"); if (t0 === "light" || t0 === "dark") theme = t0; } catch (e) {}
-  function systemTheme() { return window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; }
-  function currentTheme() { return theme || systemTheme(); }
+  // Dark (black) is the default; the switch in Settings changes to light (white) and the
+  // choice is remembered. One blue accent in both.
+  var theme = "dark";
+  try { if (localStorage.getItem("duovision.theme") === "light") theme = "light"; } catch (e) {}
+  function currentTheme() { return theme; }
   function applyTheme() {
-    var t = currentTheme(), light = t === "light";
+    var light = theme === "light";
     document.documentElement.classList.toggle("light", light);
     var m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", light ? "#ffffff" : "#000000");
     var c = document.querySelector('meta[name="color-scheme"]'); if (c) c.setAttribute("content", light ? "light" : "dark");
     $("bTheme").setAttribute("aria-checked", light ? "false" : "true");
-    $("setThemeSub").textContent = theme ? (light ? "Light: white background" : "Dark: black background") : "Following the system setting";
+    $("setThemeSub").textContent = light ? "Off: white background" : "On: black background";
   }
   function setTheme(t) {
-    theme = t === "light" || t === "dark" ? t : null;
-    try { if (theme) localStorage.setItem("duovision.theme", theme); else localStorage.removeItem("duovision.theme"); } catch (e) {}
+    theme = t === "light" ? "light" : "dark";            // anything else, including a reset, is the dark default
+    try { if (theme === "light") localStorage.setItem("duovision.theme", "light"); else localStorage.removeItem("duovision.theme"); } catch (e) {}
     applyTheme();
   }
   applyTheme();
-  if (window.matchMedia) {
-    var mq = matchMedia("(prefers-color-scheme: light)"), onMq = function () { if (!theme) applyTheme(); };
-    if (mq.addEventListener) mq.addEventListener("change", onMq); else if (mq.addListener) mq.addListener(onMq);
-  }
 
   // ------------------------------------------------------------ manifest
   function buildGroups(m) {

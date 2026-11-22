@@ -236,7 +236,8 @@ def test_viewer_html_well_formed():
         assert el in html, el
     assert "enterAdjust" in p.script and "duovision.view" in p.script and "resetAll" in p.script
     # Light / dark theme with a switch in Settings; white stage in light mode.
-    assert 'id="bTheme"' in html and "html.light" in html and "duovision.theme" in p.script and "prefers-color-scheme" in p.script
+    assert 'id="bTheme"' in html and "html.light" in html and "duovision.theme" in p.script
+    assert 'var theme = "dark";' in p.script and "prefers-color-scheme" not in html      # dark is the default
     # Setup guide: fold-guide card -> align card -> scene, driven by the manifest's group kinds.
     assert "GUIDE_STEPS" in p.script and "guideGo" in p.script and 'kind: "fold"' in p.script
     assert 'id="bGuideNext"' in html and "duovision.guideDone" in p.script

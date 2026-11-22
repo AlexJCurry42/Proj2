@@ -98,9 +98,9 @@ checkerboard; any moire or blur means the browser is scaling.
 - **Library.** Pick a viewing angle, then a tile: *Fold guide* and *Align*
   under Prepare, the 3D pictures below. The app reopens on the last picture.
 - **Settings** (a drawer on the right, so the hinge stays visible):
-  - *Appearance*: a **Dark mode** switch. Dark is black, light is white, both
-    with a blue accent; it follows the system setting until you use the switch
-    (`t` on a keyboard). In light mode the fold-guide and alignment cards are
+  - *Appearance*: a **Dark mode** switch, on by default. Dark is black, light
+    is white, both with a blue accent; the choice is remembered (`t` on a
+    keyboard). In light mode the fold-guide and alignment cards are
     shown as dark lines on white; the 3D pictures are never altered.
   - *Picture*: viewing angle and style.
   - *Display*: full screen, and True size or Fit (a scaled preview; the 3D
