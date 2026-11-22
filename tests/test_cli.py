@@ -103,7 +103,7 @@ def test_batch_cli_subset(tmp_path):
             "--scenes", "plaque", "cube", "--hinges", "115", "120"]
     assert main(args) == 0
     m = json.loads((out / "manifest.json").read_text())
-    files = sorted(p.name for p in out.glob("*.png"))
+    files = sorted(p.name for p in out.glob("*.png") if p.name not in B.VIEWER_FILES)
     assert sorted(e["file"] for e in m["entries"]) == files
     expected = {"align_115.png", "align_120.png", "plaque_115_color.png", "plaque_120_color.png",
                 "cube_115_color.png", "cube_120_color.png", "plaque_120_bw.png", "cube_120_bw.png",
@@ -126,6 +126,8 @@ def test_batch_cli_subset(tmp_path):
     cube = next(g for g in m["groups"] if g["id"] == "cube")
     assert cube["hinges"] == [115, 120] and set(cube["styles"]) == {"color", "bw", "texture"}
     assert (out / "index.html").exists()
+    for name in ("app.webmanifest", "icon-192.png", "icon-512.png"):
+        assert (out / name).exists(), name
 
     # Re-run: everything is skipped, files untouched, manifest still complete.
     mtimes = {f: (out / f).stat().st_mtime_ns for f in files}
@@ -207,6 +209,13 @@ def test_viewer_html_well_formed():
     assert "requestFullscreen" in p.script and "webkitRequestFullscreen" in p.script
     assert "fullscreenchange" in p.script and "Add to Home Screen" in html
     assert "coversScreen" in p.script and "(v[0] - nw) / 2" in p.script
+    # Installable as a full-screen landscape app (Chrome reads the web-app manifest).
+    app = json.loads((VIEWER.parent / "app.webmanifest").read_text(encoding="utf-8"))
+    assert app["display"] == "fullscreen" and app["orientation"] == "landscape"
+    assert {i["sizes"] for i in app["icons"]} >= {"192x192", "512x512"}
+    for i in app["icons"]:
+        assert (VIEWER.parent / i["src"]).exists(), i["src"]
+    assert 'rel="manifest" href="app.webmanifest"' in html
     # Self-contained: no external scripts/styles.
     assert not any(u.startswith(("http:", "https:", "//")) for u in p.urls), p.urls
     assert "<script src" not in html
