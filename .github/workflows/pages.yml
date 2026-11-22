@@ -35,7 +35,9 @@ jobs:
       - name: Install
         run: python -m pip install .
 
-      - name: Render images (full resolution) + manifest + viewer
+      # Moving pictures are drawn live by the viewer (viewer/engine.js) from the scene pack the batch
+      # exports, so no videos are rendered here. `batch --videos` still exists for making files.
+      - name: Render images (full resolution), scene pack, manifest and viewer
         run: python -m duovision batch --out site
 
       - name: Check the site
@@ -50,7 +52,12 @@ jobs:
           missing = [f for f in files if not (site / f).is_file()]
           assert files and not missing, f"{len(files)} entries, missing: {missing[:5]}"
           size = sum(p.stat().st_size for p in site.rglob("*") if p.is_file())
-          print(f"{len(files)} images, {size / 1e6:.0f} MB")
+          live = m.get("live") or {}
+          assert (site / "engine.js").is_file() and (site / live["pack"]).is_file(), "scene pack missing"
+          pack = json.loads((site / live["pack"]).read_text())
+          tpl = [s["template"]["file"] for s in pack["scenes"].values() if s["kind"] == "template"]
+          assert len(pack["scenes"]) == 8 and all((site / f).is_file() for f in tpl), "scene templates missing"
+          print(f"{len(files)} images, {len(pack['scenes'])} live scenes x {len(pack['hinges'])} angles, {size / 1e6:.0f} MB")
           assert size < 950e6, "GitHub Pages sites must stay under 1 GB"
           EOF
           touch site/.nojekyll

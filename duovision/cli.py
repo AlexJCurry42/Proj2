@@ -1,4 +1,4 @@
-"""Command line: ``python -m duovision {generate,align,fold,batch,verify} ...``"""
+"""Command line: ``python -m duovision {generate,align,fold,video,batch,verify} ...``"""
 from __future__ import annotations
 
 import argparse
@@ -68,6 +68,17 @@ def build_parser() -> argparse.ArgumentParser:
     _add_view_args(f)
     f.add_argument("--out", required=True)
 
+    m = sub.add_parser("video", help="render a looping animated stereogram of a scene to MP4 (needs ffmpeg)")
+    m.add_argument("--scene", required=True)
+    m.add_argument("--hinge", type=float, default=DEFAULT_HINGE_DEG, help="hinge angle, degrees (180 = flat)")
+    _add_encode_args(m)
+    _add_view_args(m)
+    m.add_argument("--seconds", type=float, default=None, help="loop length (default 6)")
+    m.add_argument("--fps", type=int, default=None, help="frames per second (default 30)")
+    m.add_argument("--crf", type=int, default=None, help="x264 quality, lower is better and larger (default 32)")
+    m.add_argument("--jobs", type=int, default=None, help="worker processes (default: CPU count)")
+    m.add_argument("--out", required=True, help="output .mp4 path")
+
     b = sub.add_parser("batch", help="render the agreed batch + manifest.json for the viewer")
     b.add_argument("--out", required=True, help="output directory")
     b.add_argument("--jobs", type=int, default=None, help="worker processes (default: CPU count)")
@@ -82,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--hinges", nargs="+", type=float, default=None, help=argparse.SUPPRESS)
     b.add_argument("--styles", nargs="+", default=None, help=argparse.SUPPRESS)
     b.add_argument("--extra-hinge", type=float, default=DEFAULT_HINGE_DEG, help=argparse.SUPPRESS)
+    b.add_argument("--videos", action="store_true",
+                   help="also render a looping video of every scene at 110, 120 and 130 deg (needs ffmpeg; slow)")
+    b.add_argument("--video-hinges", nargs="+", type=float, default=None, help=argparse.SUPPRESS)
+    b.add_argument("--video-scale", type=float, default=None, help=argparse.SUPPRESS)
     b.add_argument("--dry-run", action="store_true", help="list the jobs and exit")
 
     v = sub.add_parser("verify", help="evaluate an image with the virtual viewer (duovision.verify)")
@@ -156,6 +171,30 @@ def cmd_fold(a) -> int:
     return 0
 
 
+def cmd_video(a) -> int:
+    from .motion import MOTION_DESCRIPTION, MOTION_FPS, MOTION_NAMES, MOTION_SECONDS
+    from .video import VIDEO_CRF, VIDEO_SCALE, even_scale, find_ffmpeg, render_video
+
+    if a.scene not in MOTION_NAMES:
+        print(f"unknown scene {a.scene!r}; choose from {', '.join(MOTION_NAMES)}", file=sys.stderr)
+        return 2
+    if not find_ffmpeg():
+        print("ffmpeg not found: install ffmpeg, or `pip install imageio-ffmpeg`", file=sys.stderr)
+        return 1
+    scale = even_scale(a.scale if a.scale != 1.0 else VIDEO_SCALE)   # default 2/3 of the device resolution
+    p = _params(a, "video", scale=scale)
+    try:
+        st = render_video(p, a.out, seconds=a.seconds or MOTION_SECONDS, fps=a.fps or MOTION_FPS,
+                          crf=a.crf if a.crf is not None else VIDEO_CRF, n_jobs=a.jobs)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+    print(f"wrote {a.out}  {st['width']}x{st['height']}  {st['frames']} frames at {st['fps']} fps  "
+          f"{st['bytes'] / 1e6:.1f} MB ({st['mbit_per_s']:.1f} Mbit/s)  {a.scene} {MOTION_DESCRIPTION[a.scene]}  "
+          f"({st['time_render_s']:.0f}s)")
+    return 0
+
+
 def cmd_batch(a) -> int:
     from .batch import batch_jobs, run_batch
 
@@ -164,7 +203,13 @@ def cmd_batch(a) -> int:
                         dot_px=a.dot_px, scale=a.scale)
     jobs = batch_jobs(a.scenes, a.hinges, styles=a.styles, extra_hinge=a.extra_hinge, base=base,
                       align=(a.styles is None or "align" in a.styles),
-                      fold=(a.styles is None or "fold" in a.styles))
+                      fold=(a.styles is None or "fold" in a.styles),
+                      videos=a.videos, video_hinges=a.video_hinges, video_scale=a.video_scale)
+    if a.videos and not a.dry_run:
+        from .video import find_ffmpeg
+        if not find_ffmpeg():
+            print("ffmpeg not found: install ffmpeg, or `pip install imageio-ffmpeg`", file=sys.stderr)
+            return 1
     if a.dry_run:
         for j in jobs:
             print(j.file)
@@ -270,7 +315,7 @@ def main(argv=None) -> int:
     if getattr(args, "scale", 1.0) <= 0:
         print("--scale must be positive", file=sys.stderr)
         return 2
-    return {"generate": cmd_generate, "align": cmd_align, "fold": cmd_fold, "batch": cmd_batch,
+    return {"generate": cmd_generate, "align": cmd_align, "fold": cmd_fold, "video": cmd_video, "batch": cmd_batch,
             "verify": cmd_verify}[args.cmd](args)
 
 

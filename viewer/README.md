@@ -11,10 +11,11 @@ covers the **whole** display; see *Full screen* below.
 ## Make the folder
 
 ```sh
-python -m duovision batch --out out/batch      # PNGs + manifest.json + the viewer files
+python -m duovision batch --out out/batch      # PNGs, manifest.json, the scene pack for live rendering, the viewer files
+python -m duovision batch --out out/batch --videos   # also 24 looping video files (fallback / export; needs ffmpeg; about 80 min)
 ```
 
-The batch command copies the viewer (`index.html`, `app.webmanifest`, icons) into the output folder, so
+The batch command copies the viewer (`index.html`, `engine.js`, `app.webmanifest`, icons) into the output folder, so
 `out/batch/` is all you need to host (`--no-viewer` skips the copy; you can
 also copy it by hand). A different manifest can be chosen with
 `index.html?manifest=path/to/manifest.json` (images are resolved relative to it).
@@ -91,6 +92,15 @@ checkerboard; any moire or blur means the browser is scaling.
 
 ## Use it
 
+- **Moving pictures.** Every 3D picture opens moving. The viewer draws it live
+  (`engine.js`, WebGL2) at the display's full resolution, at every angle, with a
+  repeating blue pattern (or Mono: Settings -> Picture -> Pattern). The style
+  control shows **Motion** first; Colour, Mono and Texture are the random-dot
+  stills. If the device is set to reduce motion, pictures open as stills and
+  Motion is one tap away. The setup guide teaches fusing on the still and starts
+  the motion when you press Begin. If the browser has no WebGL2 the picture
+  falls back to a pre-rendered video where the site has one, else to the still;
+  Settings -> Diagnostics says which is in use.
 - **Viewing.** Tap the picture to show or hide the bars. The top bar has the
   Library (left) and Settings (right). The bottom dock steps through pictures
   and angles and switches style (Colour, Mono, Texture). Swipe left or right

@@ -238,6 +238,13 @@ def test_viewer_html_well_formed():
     # Light / dark theme with a switch in Settings; white stage in light mode.
     assert 'id="bTheme"' in html and "html.light" in html and "duovision.theme" in p.script
     assert 'var theme = "dark";' in p.script and "prefers-color-scheme" not in html      # dark is the default
+    # Looping videos: a <video> shown in the still's place, style "motion", stills for reduced motion.
+    assert 'id="vid"' in html and "playsinline" in html and "showVideo" in p.script and "defaultStyle" in p.script
+    assert 'motion: "Motion"' in p.script and "prefers-reduced-motion" in p.script
+    # Live rendering: a canvas driven by engine.js from the scene pack, with video / still fallbacks.
+    assert 'id="live"' in html and "liveInit" in p.script and "DuoEngine.Engine.supported()" in p.script and "liveFail" in p.script
+    eng = (VIEWER.parent / "engine.js").read_text(encoding="utf-8")
+    assert "webgl2" in eng and "RGBA32UI" in eng and "webglcontextlost" in eng and "canon(" in eng
     # Setup guide: fold-guide card -> align card -> scene, driven by the manifest's group kinds.
     assert "GUIDE_STEPS" in p.script and "guideGo" in p.script and 'kind: "fold"' in p.script
     assert 'id="bGuideNext"' in html and "duovision.guideDone" in p.script
@@ -245,6 +252,6 @@ def test_viewer_html_well_formed():
     assert "duovisionSetHingeAngle" in p.script and "duovision-hinge" in p.script   # native hinge-angle hook
     # Self-contained: no external scripts/styles.
     assert not any(u.startswith(("http:", "https:", "//")) for u in p.urls), p.urls
-    assert "<script src" not in html
+    assert html.count("<script src") == 1 and '<script src="engine.js"></script>' in html      # the only script file, local
     assert all(u.startswith(("data:", "#")) or "/" not in u for u in p.urls), p.urls
     assert (VIEWER.parent / "README.md").exists()

@@ -24,6 +24,43 @@ only at the encoded fold. Cue strength: 0.15 deg of bend at the hinge per degree
 (0.75 deg at 5 deg off), identical for either eye, so expect people to land within about 5 deg.
 Not yet tried by a person on the device.
 
+Live rendering (viewer `engine.js`, WebGL2, scenes from `scenes.json`): moving pictures are drawn in
+the browser at full resolution, every angle, with a designed repeating pattern instead of random dots.
+Frames rendered in headless Chromium (software WebGL) and read by the virtual viewer against `pack_scene`:
+
+| Frame | Valid | Median error (mm) | p95 error (mm) | Inliers | Link colour difference (of 255) |
+| --- | --- | --- | --- | --- | --- |
+| Sphere, 120 deg, full 2670 x 1878 | 0.92 | 0.03 | 0.11 | 0.98 | 4.6 |
+| Heart, 120 deg, 890 x 626 | 0.91 | 0.11 | 0.40 | 0.98 | 3.9 |
+| Plaque, 100 deg, 890 x 626 | 0.90 | 0.11 | 0.39 | 0.99 | 3.9 |
+| Text, 140 deg, 890 x 626 | 0.90 | 0.12 | 1.19 | 0.96 | 4.3 |
+| Torus 110, pyramid 130, pawn 120, cube 120 | 0.88-0.93 | 0.11-0.12 | 0.37-0.63 | 0.97-0.99 | 3.8-5.0 |
+| Dot still for comparison (sphere, 2/3 res) | 0.90 | 0.09 | 0.8 | 0.99 | exact |
+
+- Link colour difference: mean difference between a pixel and its (fractional) partner; unrelated pixel
+  pairs differ by about 72. The sphere row uses the final pattern weights; the other rows were measured
+  with an earlier, coarser pattern, which at full resolution mis-matched 7 % of a frame.
+- Frame-to-frame change beside the fastest glide, at 1780 x 1252 and a 1/30 s step: mean 5.4 of 255 with
+  6 % of pixels changing by more than 24, as a smooth slide; the dot video re-drew 8 % of pixels at random
+  (mean about 12 of 255). At 60 fps the step is half as large.
+- Not measured: speed on the phone. The renderer lowers its internal resolution (to 75 %, then 50 %) if
+  frames take longer than 45 ms, and the viewer falls back to the still if WebGL2 is missing or lost.
+- Not yet seen by a person on the device.
+
+Looping videos (`{scene}_{hinge}_motion.mp4`, `batch --videos`), now only a fallback and an export tool: every scene with one slow motion, at
+110, 120 and 130 deg, 1780 x 1252, 30 fps, 6 s, colour dots, H.264 at CRF 32.
+- Size and time: about 15 MB and 3.3 min per video on 4 cores (sphere at 120 deg: 15.2 MB, 196 s), so
+  about 365 MB and 80 min for the 24. At CRF 20 the same loop is 64 MB.
+- Compression does not hurt the encoding: the virtual viewer reads decoded frames of that video at
+  valid 0.89, median error 0.09 mm, inliers 0.98, against 0.90 / 0.09 / 0.99 for the uncompressed
+  frame; the same held at CRF 26, 30 and 34.
+- Stability: rows the object does not cross are identical in every frame (tested). In rows it does
+  cross, the far side of the object changes: about 8 % of all pixels per frame for the gliding sphere
+  at its fastest and 4 % at half speed; about 3 % for the turning cube. The loop restart is no
+  different from any other frame step (8.2 % either side of it).
+- Not yet seen by a person: whether that shimmer beside a moving object disturbs fusion is unknown.
+  The texture style shimmers about half as much but reads with weaker depth (valid 0.81).
+
 Open items:
 - Resolved: `tests/test_verify.py::test_vertical_head_offset_is_compensated` now passes
   (xfail removed). The two-pass, fixation-nearest peak selection was already complete;

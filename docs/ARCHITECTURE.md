@@ -135,13 +135,75 @@ the middle; folded further: pinched in the middle). The frame stays inside the c
 display width so the iPhone Duo's status strip never hides it. A 5 deg fold error bends the frame
 edges by about 0.75 deg at the hinge, the same for either eye.
 
-CLI (`python -m duovision ...`): `generate`, `align`, `fold`, `batch`, `verify`.
-Batch output: `{scene}_{hinge:03d}_{style}.png`, `fold_{hinge:03d}.png`, `align_{hinge:03d}.png`,
+CLI (`python -m duovision ...`): `generate`, `align`, `fold`, `video`, `batch` (`--videos`), `verify`.
+Batch output: `{scene}_{hinge:03d}_{style}.png`, `{scene}_{hinge:03d}_motion.mp4` (with `--videos`),
+`fold_{hinge:03d}.png`, `align_{hinge:03d}.png`,
 `manifest.json` (entry/group kinds `fold`, `align`, `scene`; groups ordered fold, align, scenes).
 Viewer: static `viewer/index.html` that loads `manifest.json` and shows each image at
 exact device pixels, with a diagnostics readout (viewport, devicePixelRatio) and a four-step
 setup guide (open, fold on the fold-guide card, centre on the align card, look at a scene).
 A native wrapper may report the hinge angle with `window.duovisionSetHingeAngle(degrees)`.
+
+## Motion and video — `duovision/motion.py`, `video.py`
+
+```python
+MOTION_SECONDS = 6.0; MOTION_FPS = 30                      # one loop: 180 frames
+def pose(name, phase) -> dict                               # dx, dy (mm), spin (deg, in the picture plane), scale, ry (cube)
+def motion_plan(name, geom, view, *, bg_vee=0.25, text="DuoVision") -> dict   # fit scale, depth range, z_lo/z_top, object grid: fixed for the loop
+def scene_frame(name, geom, view, phase, *, bg_vee=0.25, text="DuoVision") -> HeightScene   # phase in [0, 1), 1.0 wraps to 0.0
+VIDEO_SCALE = 2/3; VIDEO_CRF = 32; VIDEO_HINGES = (110.0, 120.0, 130.0)
+def even_scale(scale) -> float                              # nearest factor with an even frame width and height
+def render_frame(params, phase) -> uint8 (H, W, 3)          # scene_frame -> encode_stereogram -> guide band
+def render_video(params, out, *, seconds, fps, crf, n_jobs) -> dict   # frames piped to ffmpeg: H.264 high, yuv420p, BT.709, faststart
+def read_frame(path, index) -> uint8 (H, W, 3)              # decode one frame back, for verification
+```
+Every scene has one slow looping motion (`MOTION_DESCRIPTION`): the cube turns a quarter turn, the
+pyramid spins a quarter turn, the heart beats, the plaque, sphere and pawn glide across the hinge,
+the torus circles it, the text bobs. Rules, from the product spec's animation and comfort sections:
+- every frame is a complete stereogram of `scene_frame`, so the still verifier applies to any frame;
+- size, relief and the depth -> z mapping are fixed for the whole loop (`motion_plan` samples it);
+- the object stays inside `scene_layout` (one pattern repeat from the outer edges) for the whole loop;
+- motion is continuous and slow (under 0.5 mm and 0.6 deg per frame), and the loop closes exactly;
+- dots are seeded by chain-root position, never re-randomised: rows the object does not cross are
+  identical in every frame. Rows it does cross must change on the far side of the object (the chains
+  through it change), which is why glides are short.
+Videos are rendered at 2/3 resolution (1780 x 1252), colour dots, for 110, 120 and 130 deg: the spec's
+recommended pose (about 120 deg) and the ends of its 110-130 deg band. They need ffmpeg (system, or
+`pip install ".[video]"`). Manifest entries: kind `video`, style `motion`, `poster` = the still of the
+same scene and hinge; the viewer scales a video into the stills' box and falls back to the still where
+there is no video or the device asks for reduced motion.
+
+## Live rendering — `duovision/scenepack.py`, `viewer/engine.js`
+
+The viewer draws moving pictures itself, in real time, on the display's own pixel grid (WebGL2).
+The reference engine exports the scenes; the renderer has no shape code of its own.
+
+```python
+def export_scene_pack(out_dir, view=None, *, hinges=None, scenes=None, bg_vee=0.25, text="DuoVision") -> dict
+def pack_scene(pack, pack_dir, name, geom, view, phase) -> HeightScene   # a frame rebuilt from the pack, with the shader's arithmetic
+```
+- `scenes.json`: view profile, device, and per scene the looping motion sampled 360 times (`motion.pose`)
+  and, per hinge, the `motion_plan` constants. `scene_<name>.bin`: the scene's nominal depth map and
+  mask (uint16 + uint8, 0.2 mm grid; 0.1 mm for text). Cube and plaque are analytic.
+- `engine.js` (`DuoEngine.Engine`), three kinds of pass, all at full resolution:
+  1. *partner*: the encoder's link rules per pixel (left-eye ray, ray-marched height field, visibility from
+     the right eye, landing point on the folded display), keeping the partner position fractional;
+  2. *jump* x5: pointer doubling along the chains, interpolating the displacement field between pixels
+     (nearest pixel across depth edges), state in one RGBA32UI target;
+  3. *colour*: `tile(C_bg(p) + r(p))`.
+- `C_bg(p)` is an exact invariant coordinate system of the background-only stereogram on this fold: its
+  first component counts background links from the hinge (so it advances by exactly 1 per background link)
+  and its second is the height at which the pixel's background chain crosses the hinge. A tile with period
+  1 in the first component therefore satisfies every background link whatever the object does. Each link
+  through the object adds its phase error to `r`. Consequences: no whole-pixel disparity steps, and the
+  pattern beside a moving object slides by sub-pixel amounts instead of being re-drawn at random.
+- The tile is a seamless multi-scale noise pattern (most energy at 3-11 px) mapped through a palette;
+  the signal is carried in luminance.
+- The viewer uses the renderer for the style `motion` at every hinge in the pack; without WebGL2 or the
+  pack it falls back to a pre-rendered video if the site has one, else to the still.
+- GPU output cannot be tested in CI. It is verified by rendering frames in a browser and reading them
+  with `verify.evaluate` against `pack_scene`, plus a link check (a pixel and its fractional partner
+  must have the same colour); results are in `docs/STATUS.md`.
 
 ## Verifier — `duovision/verify.py`, `baseline.py`
 

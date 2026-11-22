@@ -36,7 +36,7 @@ GUIDE_TITLES = {"fold": "Fold guide", "align": "Align"}
 class RenderParams:
     """Everything needed to reproduce one image (stored in the PNG)."""
 
-    kind: str = "stereogram"          # "stereogram" | "align" | "fold"
+    kind: str = "stereogram"          # "stereogram" | "align" | "fold" | "video" (a looping animated stereogram)
     scene: str = "cube"
     hinge: float = DEFAULT_HINGE_DEG
     style: str = "color"
@@ -71,7 +71,7 @@ class RenderParams:
                 d.pop(k, None)
         elif self.style != "texture":
             d.pop("texture", None)
-        if self.kind == "stereogram" and self.scene != "text":
+        if self.kind in ("stereogram", "video") and self.scene != "text":
             d.pop("text", None)
         return d
 
@@ -91,6 +91,13 @@ def align_filename(hinge: float) -> str:
 
 def fold_filename(hinge: float) -> str:
     return f"fold_{int(round(hinge)):03d}.png"
+
+
+VIDEO_STYLE = "motion"        # the viewer's style name for a looping video of a scene
+
+
+def video_filename(scene: str, hinge: float) -> str:
+    return f"{scene}_{int(round(hinge)):03d}_{VIDEO_STYLE}.mp4"
 
 
 # ---------------------------------------------------------------- rendering
@@ -236,12 +243,17 @@ class Job:
 
 def batch_jobs(scenes: Iterable[str] | None = None, hinges: Iterable[float] | None = None, *,
                styles: Iterable[str] | None = None, extra_hinge: float = DEFAULT_HINGE_DEG,
-               base: RenderParams | None = None, align: bool = True, fold: bool = True) -> list[Job]:
+               base: RenderParams | None = None, align: bool = True, fold: bool = True,
+               videos: bool = False, video_hinges: Iterable[float] | None = None,
+               video_scale: float | None = None) -> list[Job]:
     """The agreed first batch (optionally restricted).
 
     - every scene x every hinge in style 'color'
     - every scene at `extra_hinge` in styles 'bw' and 'texture' (marble)
     - fold_XXX.png (fold-angle guide) and align_XXX.png for every hinge
+    - with videos=True: a looping colour-dot video of every scene at `video_hinges`
+      (default video.VIDEO_HINGES, restricted to `hinges`), rendered at `video_scale`
+      (default video.VIDEO_SCALE) of the device resolution
     """
     base = base or RenderParams()
     scenes = list(scenes) if scenes else list(_scene_names())
@@ -276,6 +288,17 @@ def batch_jobs(scenes: Iterable[str] | None = None, hinges: Iterable[float] | No
             p = RenderParams(**{**asdict(base), "kind": "stereogram", "scene": sc, "hinge": float(extra_hinge),
                                 "style": st, "texture": "marble"})
             add(Job(stereogram_filename(sc, extra_hinge, st), p))
+    if videos:
+        from .video import VIDEO_HINGES, VIDEO_SCALE, even_scale
+        vh = [float(h) for h in (video_hinges if video_hinges is not None else VIDEO_HINGES)]
+        vs = even_scale(float(video_scale) if video_scale else VIDEO_SCALE * base.scale)
+        for sc in scenes:
+            for h in vh:
+                if h not in hinges:
+                    continue
+                p = RenderParams(**{**asdict(base), "kind": "video", "scene": sc, "hinge": h,
+                                    "style": BATCH_SWEEP_STYLE, "scale": vs})
+                add(Job(video_filename(sc, h), p))
     return jobs
 
 
@@ -291,6 +314,8 @@ def run_job(out_dir: str, job: Job, force: bool = False) -> dict:
     """Render one job (in a worker) unless the file exists. Returns a manifest entry."""
     path = Path(out_dir) / job.file
     t0 = time.perf_counter()
+    if job.params.kind == "video":
+        return run_video_job(out_dir, job, force)
     if path.exists() and not force:
         params, stats, (w, h) = read_png_meta(path)
         with Image.open(path) as im:
@@ -303,8 +328,36 @@ def run_job(out_dir: str, job: Job, force: bool = False) -> dict:
     return _entry(job.file, job.params.to_meta(), _jsonable(stats), image.shape[1], image.shape[0], skipped=False)
 
 
+def run_video_job(out_dir: str, job: Job, force: bool = False, n_jobs: int | None = None, log=None) -> dict:
+    """Render one looping video unless the file exists. Returns a manifest entry."""
+    from .motion import MOTION_DESCRIPTION, MOTION_FPS, MOTION_SECONDS
+    from .video import frame_count, render_video
+
+    path = Path(out_dir) / job.file
+    p = job.params
+    dev = p.device()
+    if path.exists() and not force:
+        n = frame_count()
+        stats = {"frames": n, "fps": MOTION_FPS, "seconds": n / MOTION_FPS, "bytes": path.stat().st_size}
+        skipped = True
+    else:
+        stats = render_video(p, path, n_jobs=n_jobs, log=log)
+        skipped = False
+    stats = {**stats, "motion": MOTION_DESCRIPTION[p.scene], "loop_s": MOTION_SECONDS}
+    e = _entry(job.file, p.to_meta(), _jsonable(stats), dev.width_px, dev.height_px, skipped=skipped)
+    e["poster"] = stereogram_filename(p.scene, p.hinge, BATCH_SWEEP_STYLE)   # the still shown while the video loads
+    return e
+
+
 def _entry(file, params, stats, w, h, skipped):
     kind = params.get("kind", "stereogram")
+    if kind == "video":
+        return {
+            "file": file, "kind": kind, "scene": params.get("scene"),
+            "hinge": int(round(float(params.get("hinge", DEFAULT_HINGE_DEG)))), "style": VIDEO_STYLE,
+            "width": int(w), "height": int(h), "params": _jsonable(params), "stats": _jsonable(stats),
+            "_skipped": skipped,
+        }
     return {
         "file": file,
         "kind": kind,
@@ -331,7 +384,7 @@ def build_groups(entries: list[dict]) -> list[dict]:
         g["hinges"].add(e["hinge"])
         g["styles"].add(e["style"])
         g["items"].append({"file": e["file"], "hinge": e["hinge"], "style": e["style"]})
-    style_order = {"color": 0, "bw": 1, "texture": 2, "align": 3, "fold": 4}
+    style_order = {VIDEO_STYLE: -1, "color": 0, "bw": 1, "texture": 2, "align": 3, "fold": 4}
 
     def gkey(gid):
         if gid in GUIDE_KINDS:
@@ -348,7 +401,7 @@ def build_groups(entries: list[dict]) -> list[dict]:
     return out
 
 
-def write_manifest(out_dir, entries: list[dict], *, merge: bool = True) -> dict:
+def write_manifest(out_dir, entries: list[dict], *, merge: bool = True, live: dict | None = None) -> dict:
     out_dir = Path(out_dir)
     mpath = out_dir / "manifest.json"
     by_file = {}
@@ -379,6 +432,13 @@ def write_manifest(out_dir, entries: list[dict], *, merge: bool = True) -> dict:
         "entries": ents,
         "groups": build_groups(ents),
     }
+    if live is None and merge and mpath.exists():       # keep the scene pack of an earlier run
+        try:
+            live = json.loads(mpath.read_text()).get("live")
+        except ValueError:
+            live = None
+    if live:
+        manifest["live"] = live
     tmp = mpath.with_name("manifest.json.tmp")
     tmp.write_text(json.dumps(manifest, indent=1))
     os.replace(tmp, mpath)
@@ -386,12 +446,14 @@ def write_manifest(out_dir, entries: list[dict], *, merge: bool = True) -> dict:
 
 
 def run_batch(out_dir, jobs: list[Job], *, n_jobs: int | None = None, force: bool = False,
-              log=print, copy_viewer: bool = True) -> dict:
+              log=print, copy_viewer: bool = True, scene_pack: bool = True) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     n_jobs = max(1, int(n_jobs or os.cpu_count() or 1))
     t0 = time.perf_counter()
     entries = []
+    video_jobs = [j for j in jobs if j.params.kind == "video"]
+    jobs = [j for j in jobs if j.params.kind != "video"]
     todo = [j for j in jobs if force or not (out_dir / j.file).exists()]
     log(f"batch: {len(jobs)} images, {len(jobs) - len(todo)} already present, "
         f"{len(todo)} to render with {min(n_jobs, max(1, len(todo)))} worker(s) -> {out_dir}")
@@ -418,16 +480,36 @@ def run_batch(out_dir, jobs: list[Job], *, n_jobs: int | None = None, force: boo
                 e = f.result()
                 entries.append(e)
                 report(e)
-    manifest = write_manifest(out_dir, entries)
+    # Videos one at a time: each renders its frames on every worker.
+    for k, j in enumerate(video_jobs):
+        e = run_video_job(str(out_dir), j, force, n_jobs=n_jobs)
+        entries.append(e)
+        s = e["stats"]
+        log(f"  [video {k + 1}/{len(video_jobs)}] {e['file']}  " + ("already present" if e["_skipped"] else
+            f"{s.get('time_render_s', 0):.0f}s  {s.get('frames')} frames  {s.get('bytes', 0) / 1e6:.1f} MB"))
+    live = None
+    stills = [j for j in jobs if j.params.kind == "stereogram"]
+    if scene_pack and stills:
+        # The scenes for the viewer's real-time renderer: every scene and hinge that has a still.
+        from .scenepack import PACK_FILE, export_scene_pack
+        p0 = stills[0].params
+        t1 = time.perf_counter()
+        pack = export_scene_pack(out_dir, p0.view(), hinges=sorted({j.params.hinge for j in stills}),
+                                 scenes=[n for n in _scene_names() if any(j.params.scene == n for j in stills)],
+                                 bg_vee=p0.bg_vee, text=p0.text)
+        live = {"pack": PACK_FILE, "scenes": sorted(pack["scenes"]), "hinges": pack["hinges"]}
+        log(f"  scene pack: {len(pack['scenes'])} scenes x {len(pack['hinges'])} hinges  {time.perf_counter() - t1:.1f}s")
+    manifest = write_manifest(out_dir, entries, live=live)
     if copy_viewer:
         copy_viewer_files(out_dir)
     dt = time.perf_counter() - t0
     log(f"batch done: {len(entries)} entries, {dt:.1f}s, manifest {out_dir / 'manifest.json'}")
+    jobs = jobs + video_jobs
     manifest["_elapsed_s"] = dt
     return manifest
 
 
-VIEWER_FILES = ("index.html", "app.webmanifest", "icon-192.png", "icon-512.png")
+VIEWER_FILES = ("index.html", "engine.js", "app.webmanifest", "icon-192.png", "icon-512.png")
 
 
 def copy_viewer_files(out_dir) -> list[str]:
