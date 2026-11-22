@@ -80,7 +80,9 @@ possible for any web page there. The viewer works alongside this:
   native app is the only route to sharp 1:1 pixels across the full width.
 
 Check it in **Info** (Diagnostics): "viewport covers: YES" and "fits exactly:
-YES" mean one image pixel equals one display pixel across the whole screen.
+YES" mean one image pixel equals one display pixel across the whole screen. On
+the iPhone Duo inner display "fits exactly" reads "n/a" (iOS scales web pages
+there) and the "layout" and "hinge" lines describe the panel layout instead.
 **Pixel test** fills the screen with 1-pixel stripes and a 2-pixel
 checkerboard; any moire or blur means the browser is scaling.
 

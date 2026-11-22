@@ -292,17 +292,36 @@
   // anchor it at the window edge away from the strip, and the hinge column lands on the fold.
   // A per-orientation "strip side" and a fine nudge in mm handle what the page cannot detect.
   var prefs = { side: {}, nudgeMm: {}, mask: true };
-  try { var sp0 = JSON.parse(localStorage.getItem("duovision.panel") || "null"); if (sp0) prefs = Object.assign(prefs, sp0); } catch (e) {}
+  try {   // stored by this page only, but never trust its shape: bad values fall back to defaults
+    var sp0 = JSON.parse(localStorage.getItem("duovision.panel") || "null");
+    var isObj = function (o) { return !!o && typeof o === "object" && !Array.isArray(o); };
+    if (isObj(sp0)) {
+      if (isObj(sp0.side)) Object.keys(sp0.side).forEach(function (k) { if (sp0.side[k] === "left" || sp0.side[k] === "right") prefs.side[k] = sp0.side[k]; });
+      if (isObj(sp0.nudgeMm)) Object.keys(sp0.nudgeMm).forEach(function (k) {
+        var v = Number(sp0.nudgeMm[k]); if (isFinite(v) && Math.abs(v) <= 30) prefs.nudgeMm[k] = v; });
+      if (typeof sp0.mask === "boolean") prefs.mask = sp0.mask;
+    }
+  } catch (e) {}
   function savePrefs() { try { localStorage.setItem("duovision.panel", JSON.stringify(prefs)); } catch (e) {} }
-  function orientKey() { return (screen.orientation && screen.orientation.type) || (window.innerWidth > window.innerHeight ? "landscape" : "portrait"); }
+  function orientKey() {   // must tell the two landscape rotations apart: the strip may swap sides
+    var land = window.innerWidth > window.innerHeight ? "landscape" : "portrait";
+    if (typeof window.orientation === "number") return land + "@" + window.orientation;      // iOS WebKit: 90 / -90
+    var t = screen.orientation && screen.orientation.type, a = screen.orientation && screen.orientation.angle;
+    return t ? t + (typeof a === "number" ? "@" + a : "") : land;
+  }
   function ppi() { var d = manifest && manifest.device; return (d && d.ppi) || 430; }
   function panelLayout() {   // null unless the window is a landscape slice of a panel shaped like the picture
     var nw = img.naturalWidth, nh = img.naturalHeight, iw = window.innerWidth, ih = window.innerHeight;
     if (!nw || fitMode || iw <= ih || nw <= nh) return null;
-    if (!(navigator.standalone === true || fsActive() || (window.matchMedia && matchMedia("(display-mode: fullscreen)").matches))) return null;
+    // Only the iPhone Duo inner display: an iOS home-screen app (navigator.standalone) whose window is
+    // larger than screen.*, which on the Duo describes the outer display (466 x 678 pt). This keeps
+    // iPads, Android PWAs and desktop full screen on the normal layout with the mismatch warning.
+    if (navigator.standalone !== true) return null;
+    var sc = [screen.width, screen.height].sort(function (a, b) { return a - b; });
+    if (!(Math.max(iw, ih) > sc[1] + 1 || Math.min(iw, ih) > sc[0] + 1)) return null;
     var k = ih / nh, panelW = nw * k, strip = panelW - iw;   // CSS px per image px; widths in CSS px
     if (strip < 4 || strip > 0.25 * panelW) return null;      // fits already, or not a status strip
-    var key = orientKey(), side = prefs.side[key] || "right", nudge = prefs.nudgeMm[key] || 0;
+    var key = orientKey(), side = prefs.side[key] === "left" ? "left" : "right", nudge = Number(prefs.nudgeMm[key]) || 0;
     var mmPerCss = 25.4 / ppi() / k;
     var hinge = (side === "right" ? panelW / 2 : iw - panelW / 2) + nudge / mmPerCss;
     return { k: k, w: panelW, h: ih, left: hinge - panelW / 2, top: 0, strip: strip, side: side,
@@ -409,6 +428,7 @@
     });
     $("bFit").textContent = fitMode ? "Fit preview (scaled!)" : "1:1 pixels";
     $("bFit").className = fitMode ? "" : "on";
+    if (!fitMode && panelLayout()) { $("bFit").textContent = "Panel scale"; }
   }
   function stepHinge(d) {
     var hs = hingesOf(groups[gi]), k = hs.indexOf(hinge) + d;
@@ -497,11 +517,11 @@
       "standalone          " + (navigator.standalone === true ? "yes (home-screen app)" : (isStandalone() ? "yes" : "no")),
       "full screen         " + (fsActive() ? "yes (Fullscreen API)" : "no") + "   API " + (fsSupported() ? "available" : "not available"),
       "viewport covers     " + (coversScreen() ? "YES - page fills the whole display" : "NO - browser bars or window edges take part of the display"),
-      "display match       " + (displayMismatch() ? "NO - " + displayMismatch() : (nw ? "YES - picture size = display size" : "-")),
+      "display match       " + (displayMismatch() ? "NO - " + displayMismatch() : pl ? "n/a - Duo panel layout (see below)" : (nw ? "YES - picture size = display size" : "-")),
       "",
       "image               " + (it ? it.file : "-"),
       "natural size        " + nw + " x " + nh + (e ? "   (manifest " + e.width + " x " + e.height + ")" : ""),
-      "CSS size            " + cssW.toFixed(3) + " x " + cssH.toFixed(3) + (fitMode ? "  (FIT mode, scaled)" : "  (= natural / dpr)"),
+      "CSS size            " + cssW.toFixed(3) + " x " + cssH.toFixed(3) + (fitMode ? "  (FIT mode, scaled)" : pl ? "  (Duo panel scale)" : "  (= natural / dpr)"),
       "drawn device px     " + (cssW * r).toFixed(1) + " x " + (cssH * r).toFixed(1),
       "image offset        " + ((parseFloat(img.style.left) || 0) * r).toFixed(1) + ", " + ((parseFloat(img.style.top) || 0) * r).toFixed(1) + " device px" + (pl ? "" : " (centred on the viewport)"),
       "layout              " + (pl ? "Duo panel: status strip " + pl.side + " " + pl.strip.toFixed(1) + " CSS px (" + (pl.strip * pl.mmPerCss).toFixed(1) +
