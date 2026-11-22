@@ -199,10 +199,29 @@
   }
   function viewportDevPx() { var r = dpr(); return [Math.round(window.innerWidth * r), Math.round(window.innerHeight * r)]; }
   function screenDevPx() { var r = dpr(); return [Math.round(screen.width * r), Math.round(screen.height * r)]; }
-  function coversScreen() {   // orientation-independent: iOS reports screen.width/height in portrait
-    var v = viewportDevPx(), s = screenDevPx();
-    var near = function (a, b) { return Math.abs(a - b) <= 1; };
-    return (near(v[0], s[0]) && near(v[1], s[1])) || (near(v[0], s[1]) && near(v[1], s[0]));
+  function coversScreen() {
+    if (fsActive()) return true;
+    // iOS home-screen app (Safari or Chrome) with viewport-fit=cover: the page runs edge to edge;
+    // the status-bar / home-indicator areas are inside it as safe-area insets.
+    if (navigator.standalone === true) return true;
+    if (window.matchMedia && matchMedia("(display-mode: fullscreen)").matches) return true;
+    // Otherwise compare with screen.* (orientation-independent: iOS reports it in portrait). Some
+    // devices (foldables) report another display there, smaller than the page; a page cannot be
+    // larger than the display it is on, so "at least as large" counts as covering.
+    var v = viewportDevPx().slice().sort(function (a, b) { return a - b; });
+    var s = screenDevPx().slice().sort(function (a, b) { return a - b; });
+    return v[0] >= s[0] - 1 && v[1] >= s[1] - 1;
+  }
+  // Does the picture match the display it is shown on? Returns null if it does.
+  function displayMismatch() {
+    var nw = img.naturalWidth, nh = img.naturalHeight, v = viewportDevPx();
+    if (!nw || (nw === v[0] && nh === v[1])) return null;
+    if (nw === v[1] && nh === v[0])
+      return "Rotate the phone to " + (nw > nh ? "landscape" : "portrait") + " (hinge " + (nw > nh ? "vertical" : "horizontal") + ").";
+    var big = Math.max(v[0], v[1]), small = Math.min(v[0], v[1]);
+    var turn = (nw > nh) !== (v[0] > v[1]) ? " Rotate the phone to " + (nw > nh ? "landscape" : "portrait") + " first." : "";
+    return "This display is " + big + "\u00d7" + small + " device px but the pictures are " + Math.max(nw, nh) + "\u00d7" +
+      Math.min(nw, nh) + ": they were made for a different screen size." + turn;
   }
   function enterFullscreen() {
     fitMode = false;   // full screen is always 1:1: a scaled picture cannot line up with the hinge
@@ -235,7 +254,7 @@
     if (fsActive()) { b.textContent = "Exit full screen"; b.className = "on"; }
     else if (full) { b.innerHTML = "&#9974; Full screen &#10003;"; b.className = "on"; }
     else { b.innerHTML = "&#9974; Full screen"; b.className = ""; }
-    var w = $("fsWarn"), t = $("fsWarnText");
+    var w = $("fsWarn"), t = $("fsWarnText"), mm = displayMismatch();
     if (fitMode) {
       t.textContent = "Fit preview: the picture is scaled, so the 3D will not work. Tap \u201c1:1 pixels\u201d.";
       w.classList.add("on");
@@ -244,6 +263,9 @@
       t.textContent = "Not full screen (page " + v[0] + "\u00d7" + v[1] + " of " + Math.max(s[0], s[1]) + "\u00d7" +
         Math.min(s[0], s[1]) + " device px): the picture is cropped and cannot line up with the hinge. " +
         (fsSupported() ? "Tap the picture or \u201cFull screen\u201d." : "Tap \u201cFull screen\u201d for how to fix it.");
+      w.classList.add("on");
+    } else if (mm) {
+      t.textContent = mm + " The picture cannot line up with the hinge until it matches the display (see Info).";
       w.classList.add("on");
     } else w.classList.remove("on");
   }
@@ -413,6 +435,7 @@
       "standalone          " + (navigator.standalone === true ? "yes (home-screen app)" : (isStandalone() ? "yes" : "no")),
       "full screen         " + (fsActive() ? "yes (Fullscreen API)" : "no") + "   API " + (fsSupported() ? "available" : "not available"),
       "viewport covers     " + (coversScreen() ? "YES - page fills the whole display" : "NO - browser bars or window edges take part of the display"),
+      "display match       " + (displayMismatch() ? "NO - " + displayMismatch() : (nw ? "YES - picture size = display size" : "-")),
       "",
       "image               " + (it ? it.file : "-"),
       "natural size        " + nw + " x " + nh + (e ? "   (manifest " + e.width + " x " + e.height + ")" : ""),
