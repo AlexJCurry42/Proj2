@@ -21,8 +21,14 @@ also copy it by hand). A different manifest can be chosen with
 
 ## Host it
 
-Any static host works; the page only needs HTTP(S) because browsers block
-`fetch()` of `manifest.json` from `file://`.
+**Easiest: the hosted site.** `.github/workflows/pages.yml` renders the full
+batch and publishes it with this viewer on GitHub Pages on every push to `main`
+(or on demand: Actions -> Pages -> Run workflow). Open
+`https://alexjcurry42.github.io/Proj2/` in Safari on the Duo; nothing to install.
+One-time setup: repo Settings -> Pages -> Source: **GitHub Actions**.
+
+Any other static host works too; the page only needs HTTP(S) because browsers
+block `fetch()` of `manifest.json` from `file://`.
 
 - Local network: `cd out/batch && python -m http.server 8000`, then open
   `http://<computer-ip>:8000/` in Safari on the Duo (same Wi-Fi).
