@@ -217,6 +217,8 @@ def test_viewer_html_well_formed():
         assert (VIEWER.parent / i["src"]).exists(), i["src"]
     assert 'rel="manifest" href="app.webmanifest"' in html
     assert "displayMismatch" in p.script and "navigator.standalone === true" in p.script
+    # iPhone Duo: works alongside the iOS status strip (hinge on the fold, panel scale, nudge).
+    assert "panelLayout" in p.script and "nudgeMm" in p.script and 'id="mask"' in html
     # Self-contained: no external scripts/styles.
     assert not any(u.startswith(("http:", "https:", "//")) for u in p.urls), p.urls
     assert "<script src" not in html

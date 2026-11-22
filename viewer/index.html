@@ -23,7 +23,11 @@
   #img { position: absolute; left: 0; top: 0; display: block; max-width: none; max-height: none;
     image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;
     -webkit-touch-callout: default; /* long-press -> Save to Photos */ }
-  #img.fit { image-rendering: auto; }
+  #img.fit, #img.panel { image-rendering: auto; }
+  #mask { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: #000; display: none; pointer-events: none; }
+  #panelRow { display: none; }
+  .panelmode #panelRow { display: flex; }
+  #nudgeVal { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
   #pixtest { position: absolute; left: 0; top: 0; display: none; image-rendering: pixelated; }
   button { font: inherit; color: var(--fg); background: #1d2029; border: 1px solid var(--line); border-radius: 12px;
     min-width: 48px; min-height: 48px; padding: 8px 14px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -65,6 +69,7 @@
 <body>
 <div id="stage">
   <img id="img" alt="" draggable="false">
+  <div id="mask"></div>
   <canvas id="pixtest"></canvas>
 </div>
 <div id="msg">Loading manifest.json&hellip;</div>
@@ -81,6 +86,13 @@
   <div class="row"><span class="hint">Angle</span><div class="pills" id="hingePills"></div></div>
   <div class="row" id="styleRow"><span class="hint">Style</span><div class="pills" id="stylePills"></div>
     <span style="flex:1"></span><button id="bFit">1:1 pixels</button></div>
+  <div class="row" id="panelRow"><span class="hint">Hinge</span>
+    <button id="bNudgeL" aria-label="Move picture left">&#9664; 0.5 mm</button>
+    <span id="nudgeVal">0.0 mm</span>
+    <button id="bNudgeR" aria-label="Move picture right">0.5 mm &#9654;</button>
+    <button id="bNudge0">Reset</button>
+    <span class="hint">Status strip</span><button id="bSide">right</button>
+    <button id="bMask">Mirror strip: on</button></div>
 </div>
 <div class="overlay" id="bottom">
   <div class="row warn" id="fsWarn"><span id="fsWarnText"></span></div>
@@ -215,13 +227,14 @@
   // Does the picture match the display it is shown on? Returns null if it does.
   function displayMismatch() {
     var nw = img.naturalWidth, nh = img.naturalHeight, v = viewportDevPx();
-    if (!nw || (nw === v[0] && nh === v[1])) return null;
+    if (!nw || (nw === v[0] && nh === v[1]) || panelLayout()) return null;
     if (nw === v[1] && nh === v[0])
       return "Rotate the phone to " + (nw > nh ? "landscape" : "portrait") + " (hinge " + (nw > nh ? "vertical" : "horizontal") + ").";
     var big = Math.max(v[0], v[1]), small = Math.min(v[0], v[1]);
     var turn = (nw > nh) !== (v[0] > v[1]) ? " Rotate the phone to " + (nw > nh ? "landscape" : "portrait") + " first." : "";
+    var home = navigator.standalone === true || fsActive() ? "" : " On iPhone, open DuoVision from its home-screen icon.";
     return "This display is " + big + "\u00d7" + small + " device px but the pictures are " + Math.max(nw, nh) + "\u00d7" +
-      Math.min(nw, nh) + ": they were made for a different screen size." + turn;
+      Math.min(nw, nh) + ": they were made for a different screen size." + turn + home;
   }
   function enterFullscreen() {
     fitMode = false;   // full screen is always 1:1: a scaled picture cannot line up with the hinge
@@ -270,12 +283,60 @@
     } else w.classList.remove("on");
   }
 
+  // ------------------------------------------------- iPhone Duo panel layout
+  // On the unfolded inner display iOS keeps a vertical status strip on one side and gives web
+  // apps (Safari or Chrome, both WebKit) a window that stops at it, and it renders pages at 3x
+  // then scales them to the panel, so 1 image px = 1 CSS px x dpr is NOT one physical pixel.
+  // The window still spans the panel's full short side, so: scale the picture to the window
+  // height (its physical size in mm is then right, since the picture has the panel's shape),
+  // anchor it at the window edge away from the strip, and the hinge column lands on the fold.
+  // A per-orientation "strip side" and a fine nudge in mm handle what the page cannot detect.
+  var prefs = { side: {}, nudgeMm: {}, mask: true };
+  try { var sp0 = JSON.parse(localStorage.getItem("duovision.panel") || "null"); if (sp0) prefs = Object.assign(prefs, sp0); } catch (e) {}
+  function savePrefs() { try { localStorage.setItem("duovision.panel", JSON.stringify(prefs)); } catch (e) {} }
+  function orientKey() { return (screen.orientation && screen.orientation.type) || (window.innerWidth > window.innerHeight ? "landscape" : "portrait"); }
+  function ppi() { var d = manifest && manifest.device; return (d && d.ppi) || 430; }
+  function panelLayout() {   // null unless the window is a landscape slice of a panel shaped like the picture
+    var nw = img.naturalWidth, nh = img.naturalHeight, iw = window.innerWidth, ih = window.innerHeight;
+    if (!nw || fitMode || iw <= ih || nw <= nh) return null;
+    if (!(navigator.standalone === true || fsActive() || (window.matchMedia && matchMedia("(display-mode: fullscreen)").matches))) return null;
+    var k = ih / nh, panelW = nw * k, strip = panelW - iw;   // CSS px per image px; widths in CSS px
+    if (strip < 4 || strip > 0.25 * panelW) return null;      // fits already, or not a status strip
+    var key = orientKey(), side = prefs.side[key] || "right", nudge = prefs.nudgeMm[key] || 0;
+    var mmPerCss = 25.4 / ppi() / k;
+    var hinge = (side === "right" ? panelW / 2 : iw - panelW / 2) + nudge / mmPerCss;
+    return { k: k, w: panelW, h: ih, left: hinge - panelW / 2, top: 0, strip: strip, side: side,
+             nudge: nudge, hinge: hinge, mmPerCss: mmPerCss, key: key };
+  }
+  function nudge(dmm) {
+    var pl = panelLayout(); if (!pl) return;
+    prefs.nudgeMm[pl.key] = dmm === null ? 0 : Math.round((pl.nudge + dmm) * 10) / 10; savePrefs(); layout();
+  }
+  function flipSide() {
+    var pl = panelLayout(); if (!pl) return;
+    prefs.side[pl.key] = pl.side === "right" ? "left" : "right"; savePrefs(); layout();
+  }
+
   function layout() {
     updateFullscreenUi();
     if (!img.naturalWidth) return;
     var r = dpr(), nw = img.naturalWidth, nh = img.naturalHeight, v = viewportDevPx();
-    var w, h, left, top;
-    if (fitMode) {
+    var w, h, left, top, pl = panelLayout(), mask = $("mask");
+    document.body.classList.toggle("panelmode", !!pl);
+    img.classList.toggle("panel", !!pl);
+    mask.style.display = "none";
+    if (pl) {
+      w = pl.w; h = pl.h; left = pl.left; top = pl.top;
+      img.classList.remove("fit");
+      if (prefs.mask) {   // hide the same width on the other side, so both eyes see a symmetric frame
+        // visible extent left of the hinge = hinge, right of it = innerWidth - hinge: mask the excess
+        mask.style.display = "block";
+        mask.style.width = Math.max(0, pl.side === "right" ? 2 * pl.hinge - window.innerWidth : window.innerWidth - 2 * pl.hinge) + "px";
+        mask.style.left = pl.side === "right" ? "0px" : "auto"; mask.style.right = pl.side === "right" ? "auto" : "0px";
+      }
+      $("nudgeVal").textContent = (pl.nudge > 0 ? "+" : "") + pl.nudge.toFixed(1) + " mm";
+      $("bSide").textContent = pl.side; $("bMask").textContent = "Mirror strip: " + (prefs.mask ? "on" : "off");
+    } else if (fitMode) {
       var s = Math.min(window.innerWidth / nw, window.innerHeight / nh);
       w = nw * s; h = nh * s;
       left = (window.innerWidth - w) / 2; top = (window.innerHeight - h) / 2;
@@ -422,6 +483,7 @@
     var nw = img.naturalWidth, nh = img.naturalHeight;
     var cssW = parseFloat(img.style.width) || 0, cssH = parseFloat(img.style.height) || 0;
     var exact = !fitMode && nw > 0 && nw === devW && nh === devH && coversScreen() && (!vv || Math.abs(vv.scale - 1) < 1e-6);
+    var pl = panelLayout();
     var lines = [
       "window.inner        " + iw + " x " + ih + " CSS px",
       "documentElement     " + document.documentElement.clientWidth + " x " + document.documentElement.clientHeight,
@@ -441,8 +503,13 @@
       "natural size        " + nw + " x " + nh + (e ? "   (manifest " + e.width + " x " + e.height + ")" : ""),
       "CSS size            " + cssW.toFixed(3) + " x " + cssH.toFixed(3) + (fitMode ? "  (FIT mode, scaled)" : "  (= natural / dpr)"),
       "drawn device px     " + (cssW * r).toFixed(1) + " x " + (cssH * r).toFixed(1),
-      "image offset        " + ((parseFloat(img.style.left) || 0) * r).toFixed(1) + ", " + ((parseFloat(img.style.top) || 0) * r).toFixed(1) + " device px (centred on the viewport)",
+      "image offset        " + ((parseFloat(img.style.left) || 0) * r).toFixed(1) + ", " + ((parseFloat(img.style.top) || 0) * r).toFixed(1) + " device px" + (pl ? "" : " (centred on the viewport)"),
+      "layout              " + (pl ? "Duo panel: status strip " + pl.side + " " + pl.strip.toFixed(1) + " CSS px (" + (pl.strip * pl.mmPerCss).toFixed(1) +
+        " mm), panel " + pl.w.toFixed(1) + " x " + pl.h + " CSS px" : (fitMode ? "fit preview" : "1:1 centred")),
+      "panel scale         " + (pl ? pl.k.toFixed(4) + " CSS px per image px, " + pl.mmPerCss.toFixed(4) + " mm per CSS px (" + ppi() + " ppi)" : "-"),
+      "hinge               " + (pl ? "CSS x " + pl.hinge.toFixed(1) + " of " + iw + " (window centre " + (iw / 2).toFixed(1) + "), nudge " + pl.nudge.toFixed(1) + " mm" : "-"),
       "fits exactly        " + (exact ? "YES - 1 image pixel = 1 display pixel, full screen"
+        : pl ? "n/a - iOS scales web pages on this display; picture scaled to the panel's true size, hinge on the fold"
         : fitMode ? "NO - fit preview is scaled (press 1:1 pixels)"
         : (nw > devW || nh > devH ? "NO - image is " + (nw - devW) + " x " + (nh - devH) + " device px larger than the viewport (cropped evenly on both sides)"
           : (nw === devW && nh === devH ? "NO - viewport does not cover the whole screen"
@@ -451,7 +518,7 @@
       "userAgent           " + navigator.userAgent
     ];
     var t = $("diagText"); t.textContent = lines.join("\n");
-    t.className = exact ? "ok" : "";
+    t.className = exact || pl ? "ok" : "";
     return lines.join("\n");
   }
 
@@ -486,6 +553,8 @@
     else if (k === "i" || k === "d") openDiag();
     else if (k === "f") toggleFullscreen();
     else if (k === "p") { fitMode = !fitMode; layout(); show(); }
+    else if (k === "[") nudge(-0.1);
+    else if (k === "]") nudge(0.1);
     else if (k === " " || k === "Enter") toggleOverlay();
     else return;
     ev.preventDefault();
@@ -497,6 +566,11 @@
   $("bNext").onclick = function () { stepHinge(1); };
   $("bFit").onclick = function () { fitMode = !fitMode; layout(); show(); };
   $("bFull").onclick = toggleFullscreen;
+  $("bNudgeL").onclick = function () { nudge(-0.5); };
+  $("bNudgeR").onclick = function () { nudge(0.5); };
+  $("bNudge0").onclick = function () { nudge(null); };
+  $("bSide").onclick = flipSide;
+  $("bMask").onclick = function () { prefs.mask = !prefs.mask; savePrefs(); layout(); };
   $("bFsHelpClose").onclick = closeSheets;
   $("bRefresh").onclick = diagnostics;
   $("bPixTest").onclick = function () { closeSheets(); toggleOverlay(false); setPixTest(true); };

@@ -58,6 +58,27 @@ to the window, which breaks the projection; it is now only a labelled preview.)
 - While the page does not cover the whole display, the bottom bar shows a
   yellow "Not full screen" warning with the page and screen sizes.
 
+### iPhone Duo inner display (status strip)
+
+On the unfolded inner display iOS keeps a vertical status strip (clock, Wi-Fi)
+on one side, and web apps get a window that stops at it: 867 x 669 of the
+951 x 669 pt panel in landscape. iOS also renders pages at 3x (2853 x 2007)
+and scales them to the 2670 x 1878 panel, so 1:1 physical pixels are not
+possible for any web page there. The viewer works alongside this:
+
+- In the home-screen app, in landscape, it scales the picture to the window
+  height, so its size in mm matches the panel, and anchors it at the window
+  edge away from the strip, so the hinge column sits on the physical fold
+  (CSS x 475.5 of 867, not the window centre).
+- **Hinge** controls in the top bar: nudge by 0.5 mm (`[`/`]` by 0.1 mm),
+  reset, choose which side the strip is on, and mirror the strip (hide the
+  same width on the other side so both eyes get a symmetric frame). Settings
+  are remembered per orientation.
+- Check on the **Align** card: the blue vertical line should sit exactly on
+  the fold. Info shows the layout, scale and hinge position.
+- The browser resamples the picture by about 7%, so it is slightly soft. A
+  native app is the only route to sharp 1:1 pixels across the full width.
+
 Check it in **Info** (Diagnostics): "viewport covers: YES" and "fits exactly:
 YES" mean one image pixel equals one display pixel across the whole screen.
 **Pixel test** fills the screen with 1-pixel stripes and a 2-pixel
