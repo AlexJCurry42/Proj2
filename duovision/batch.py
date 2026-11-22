@@ -401,7 +401,7 @@ def build_groups(entries: list[dict]) -> list[dict]:
     return out
 
 
-def write_manifest(out_dir, entries: list[dict], *, merge: bool = True) -> dict:
+def write_manifest(out_dir, entries: list[dict], *, merge: bool = True, live: dict | None = None) -> dict:
     out_dir = Path(out_dir)
     mpath = out_dir / "manifest.json"
     by_file = {}
@@ -432,6 +432,13 @@ def write_manifest(out_dir, entries: list[dict], *, merge: bool = True) -> dict:
         "entries": ents,
         "groups": build_groups(ents),
     }
+    if live is None and merge and mpath.exists():       # keep the scene pack of an earlier run
+        try:
+            live = json.loads(mpath.read_text()).get("live")
+        except ValueError:
+            live = None
+    if live:
+        manifest["live"] = live
     tmp = mpath.with_name("manifest.json.tmp")
     tmp.write_text(json.dumps(manifest, indent=1))
     os.replace(tmp, mpath)
@@ -439,7 +446,7 @@ def write_manifest(out_dir, entries: list[dict], *, merge: bool = True) -> dict:
 
 
 def run_batch(out_dir, jobs: list[Job], *, n_jobs: int | None = None, force: bool = False,
-              log=print, copy_viewer: bool = True) -> dict:
+              log=print, copy_viewer: bool = True, scene_pack: bool = True) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     n_jobs = max(1, int(n_jobs or os.cpu_count() or 1))
@@ -480,7 +487,19 @@ def run_batch(out_dir, jobs: list[Job], *, n_jobs: int | None = None, force: boo
         s = e["stats"]
         log(f"  [video {k + 1}/{len(video_jobs)}] {e['file']}  " + ("already present" if e["_skipped"] else
             f"{s.get('time_render_s', 0):.0f}s  {s.get('frames')} frames  {s.get('bytes', 0) / 1e6:.1f} MB"))
-    manifest = write_manifest(out_dir, entries)
+    live = None
+    stills = [j for j in jobs if j.params.kind == "stereogram"]
+    if scene_pack and stills:
+        # The scenes for the viewer's real-time renderer: every scene and hinge that has a still.
+        from .scenepack import PACK_FILE, export_scene_pack
+        p0 = stills[0].params
+        t1 = time.perf_counter()
+        pack = export_scene_pack(out_dir, p0.view(), hinges=sorted({j.params.hinge for j in stills}),
+                                 scenes=[n for n in _scene_names() if any(j.params.scene == n for j in stills)],
+                                 bg_vee=p0.bg_vee, text=p0.text)
+        live = {"pack": PACK_FILE, "scenes": sorted(pack["scenes"]), "hinges": pack["hinges"]}
+        log(f"  scene pack: {len(pack['scenes'])} scenes x {len(pack['hinges'])} hinges  {time.perf_counter() - t1:.1f}s")
+    manifest = write_manifest(out_dir, entries, live=live)
     if copy_viewer:
         copy_viewer_files(out_dir)
     dt = time.perf_counter() - t0
@@ -490,7 +509,7 @@ def run_batch(out_dir, jobs: list[Job], *, n_jobs: int | None = None, force: boo
     return manifest
 
 
-VIEWER_FILES = ("index.html", "app.webmanifest", "icon-192.png", "icon-512.png")
+VIEWER_FILES = ("index.html", "engine.js", "app.webmanifest", "icon-192.png", "icon-512.png")
 
 
 def copy_viewer_files(out_dir) -> list[str]:

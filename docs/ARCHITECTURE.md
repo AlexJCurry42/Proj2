@@ -173,6 +173,38 @@ recommended pose (about 120 deg) and the ends of its 110-130 deg band. They need
 same scene and hinge; the viewer scales a video into the stills' box and falls back to the still where
 there is no video or the device asks for reduced motion.
 
+## Live rendering — `duovision/scenepack.py`, `viewer/engine.js`
+
+The viewer draws moving pictures itself, in real time, on the display's own pixel grid (WebGL2).
+The reference engine exports the scenes; the renderer has no shape code of its own.
+
+```python
+def export_scene_pack(out_dir, view=None, *, hinges=None, scenes=None, bg_vee=0.25, text="DuoVision") -> dict
+def pack_scene(pack, pack_dir, name, geom, view, phase) -> HeightScene   # a frame rebuilt from the pack, with the shader's arithmetic
+```
+- `scenes.json`: view profile, device, and per scene the looping motion sampled 360 times (`motion.pose`)
+  and, per hinge, the `motion_plan` constants. `scene_<name>.bin`: the scene's nominal depth map and
+  mask (uint16 + uint8, 0.2 mm grid; 0.1 mm for text). Cube and plaque are analytic.
+- `engine.js` (`DuoEngine.Engine`), three kinds of pass, all at full resolution:
+  1. *partner*: the encoder's link rules per pixel (left-eye ray, ray-marched height field, visibility from
+     the right eye, landing point on the folded display), keeping the partner position fractional;
+  2. *jump* x5: pointer doubling along the chains, interpolating the displacement field between pixels
+     (nearest pixel across depth edges), state in one RGBA32UI target;
+  3. *colour*: `tile(C_bg(p) + r(p))`.
+- `C_bg(p)` is an exact invariant coordinate system of the background-only stereogram on this fold: its
+  first component counts background links from the hinge (so it advances by exactly 1 per background link)
+  and its second is the height at which the pixel's background chain crosses the hinge. A tile with period
+  1 in the first component therefore satisfies every background link whatever the object does. Each link
+  through the object adds its phase error to `r`. Consequences: no whole-pixel disparity steps, and the
+  pattern beside a moving object slides by sub-pixel amounts instead of being re-drawn at random.
+- The tile is a seamless multi-scale noise pattern (most energy at 3-11 px) mapped through a palette;
+  the signal is carried in luminance.
+- The viewer uses the renderer for the style `motion` at every hinge in the pack; without WebGL2 or the
+  pack it falls back to a pre-rendered video if the site has one, else to the still.
+- GPU output cannot be tested in CI. It is verified by rendering frames in a browser and reading them
+  with `verify.evaluate` against `pack_scene`, plus a link check (a pixel and its fractional partner
+  must have the same colour); results are in `docs/STATUS.md`.
+
 ## Verifier — `duovision/verify.py`, `baseline.py`
 
 ```python

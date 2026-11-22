@@ -39,6 +39,7 @@
     image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;
     -webkit-touch-callout: default; /* long-press -> Save to Photos */ }
   #img.fit, #img.panel { image-rendering: auto; }
+  #live { position: absolute; left: 0; top: 0; display: none; image-rendering: pixelated; image-rendering: crisp-edges; }
   #vid { position: absolute; left: 0; top: 0; display: none; max-width: none; max-height: none; object-fit: fill; background: var(--stage); }
   #mask { position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: var(--stage); display: none; pointer-events: none; }
   #pixtest { position: absolute; left: 0; top: 0; display: none; image-rendering: pixelated; }
@@ -234,6 +235,7 @@
 <div id="stage">
   <img id="img" alt="" draggable="false">
   <video id="vid" playsinline webkit-playsinline loop muted preload="auto" disablepictureinpicture></video>
+  <canvas id="live"></canvas>
   <div id="mask"></div>
   <canvas id="pixtest"></canvas>
 </div>
@@ -312,6 +314,8 @@
     <div class="stepper"><button id="bSetAngleDown" aria-label="Smaller angle">&#8249;</button><span class="val" id="setAngleVal"></span>
       <button id="bSetAngleUp" aria-label="Larger angle">&#8250;</button></div></div>
   <div class="set-row" id="setStyleRow"><span class="name">Style</span><div class="seg" id="setStyleSeg"></div></div>
+  <div class="set-row" id="setPatternRow"><span class="name">Pattern<small>For moving pictures</small></span>
+    <div class="seg"><button id="bPatAzure">Blue</button><button id="bPatMono">Mono</button></div></div>
   <h3>Display</h3>
   <div class="set-row"><span class="name">Full screen<small id="setFullSub"></small></span><button id="bFull">Enter</button></div>
   <div class="set-row"><span class="name">Size<small id="setSizeSub"></small></span>
@@ -364,6 +368,7 @@
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)"></div>
 </div>
 
+<script src="engine.js"></script>
 <script>
 (function () {
   "use strict";
@@ -380,12 +385,91 @@
   var reduceMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
   function defaultStyle() { return reduceMotion ? "color" : "motion"; }
   var manifest = null, groups = [], gi = 0, hinge = null, wantStyle = defaultStyle(), fitMode = false, pixTest = false;
-  var vid = $("vid"), media = { video: false, w: 0, h: 0 };
+  var vid = $("vid"), cv = $("live"), media = { video: false, live: false, w: 0, h: 0 };
   function isVideoFile(f) { return /\.mp4$/i.test(f || ""); }
   // Size the layout works in, in image pixels: a still's own size; for a video the size of the stills
   // (videos are encoded smaller and scaled up to the same place on the display).
-  function mediaW() { return media.video ? media.w : img.naturalWidth; }
-  function mediaH() { return media.video ? media.h : img.naturalHeight; }
+  function mediaW() { return media.video || media.live ? media.w : img.naturalWidth; }
+  function mediaH() { return media.video || media.live ? media.h : img.naturalHeight; }
+
+  // ---------------------------------------------------- live rendering
+  // "Motion" is drawn live by engine.js (WebGL2) from the scene pack, on the display's own pixel
+  // grid: no video file, no compression, every angle. Where WebGL2 or the pack is missing it falls
+  // back to a pre-rendered video if the site has one, else to the still.
+  var qs = new URLSearchParams(location.search);
+  var live = { ok: false, pack: null, eng: null, raf: 0, t0: 0, last: 0, acc: [], lostFrames: 0,
+               scale: Number(qs.get("livescale")) || 1, fixedScale: !!qs.get("livescale"), pattern: "azure", fps: 0 };
+  try { var pat0 = localStorage.getItem("duovision.pattern"); if (pat0 === "mono" || pat0 === "azure") live.pattern = pat0; } catch (e) {}
+  function liveInit() {
+    if (!manifest || !manifest.live || qs.get("live") === "0") return;
+    if (!window.DuoEngine || !DuoEngine.Engine.supported()) return;
+    fetch(baseUrl + manifest.live.pack, { cache: "no-cache" }).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (pack) {
+        live.pack = pack; live.eng = new DuoEngine.Engine(cv, pack, { pattern: live.pattern }); live.ok = true;
+        if (groups.length && !guide) show(); else if (groups.length) updateOverlay(current());
+      }).catch(function () { live.ok = false; });
+  }
+  function liveHas(g, h) { return live.ok && groupKind(g) === "scene" && live.eng.hasScene(g.id, h); }
+  function liveFail() { live.ok = false; stopLive(); show(); }
+  function stopLive() {
+    media.live = false;
+    if (live.raf) { cancelAnimationFrame(live.raf); live.raf = 0; }
+    cv.style.display = "none"; if (!pixTest) img.style.display = "block";
+  }
+  function showLive() {
+    var d = manifest.device || {}, name = groups[gi].id, eng = live.eng, h = hinge;
+    if (media.video) stopVideo();
+    var start = function () {
+      if (groups[gi].id !== name || hinge !== h || !live.ok) return;
+      media.live = true; media.w = d.width_px || 2670; media.h = d.height_px || 1878;
+      eng.setScene(name, h);
+      if (!pixTest) { img.style.display = "none"; vid.style.display = "none"; cv.style.display = "block"; }
+      layout(); msg.style.display = "none";
+      if (!live.raf) { live.last = 0; live.acc = []; live.raf = requestAnimationFrame(liveFrame); }
+      if ($("diag").classList.contains("open")) diagnostics();
+    };
+    if (eng.needsTemplate(name)) {
+      fetch(baseUrl + live.pack.scenes[name].template.file).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.arrayBuffer(); })
+        .then(function (buf) { eng.addTemplate(name, buf); start(); }).catch(liveFail);
+    } else start();
+  }
+  function liveFrame(ts) {
+    live.raf = 0;
+    if (!media.live) return;
+    if (!document.hidden && !pixTest) {
+      if (!live.t0) live.t0 = ts;
+      var ok = false;
+      try { ok = live.eng.render(((ts - live.t0) / 1000 / live.pack.loop_seconds) % 1); } catch (e) { liveFail(); return; }
+      if (live.eng.lost) { if (++live.lostFrames > 180) { liveFail(); return; } } else live.lostFrames = 0;
+      if (live.last) {
+        live.acc.push(ts - live.last);
+        if (live.acc.length >= 40) {                 // too slow for this device: draw on a coarser grid
+          var a = live.acc.slice().sort(function (x, y) { return x - y; }), med = a[20];
+          live.fps = 1000 / med; live.acc = [];
+          if (ok && med > 45 && live.scale > 0.5 && !live.fixedScale) { live.scale = live.scale > 0.8 ? 0.75 : 0.5; layout(); }
+        }
+      }
+      live.last = ts;
+    } else live.last = 0;
+    live.raf = requestAnimationFrame(liveFrame);
+  }
+  // The canvas covers the visible part of the picture box; the renderer works on the whole picture's
+  // pixel grid (so chains run under the status strip too) and shows that slice.
+  function liveLayout(left, top, w, h) {
+    var r = dpr() * live.scale, W = Math.max(2, Math.round(w * r)), H = Math.max(2, Math.round(h * r));
+    var vl = Math.max(0, left), vt = Math.max(0, top), vr = Math.min(window.innerWidth, left + w), vb = Math.min(window.innerHeight, top + h);
+    var offX = Math.min(W - 1, Math.max(0, Math.round((vl - left) * r))), offY = Math.min(H - 1, Math.max(0, Math.round((vt - top) * r)));
+    var cw = Math.max(1, Math.min(W - offX, Math.round((vr - vl) * r))), ch = Math.max(1, Math.min(H - offY, Math.round((vb - vt) * r)));
+    cv.style.left = vl + "px"; cv.style.top = vt + "px"; cv.style.width = (cw / r) + "px"; cv.style.height = (ch / r) + "px";
+    live.eng.pattern = live.pattern;
+    live.eng.setGrid({ W: W, H: H, mm: live.pack.device.width_mm / W, offX: offX, offY: offY, cw: cw, ch: ch });
+  }
+  function setPattern(name) {
+    live.pattern = name === "mono" ? "mono" : "azure";
+    try { localStorage.setItem("duovision.pattern", live.pattern); } catch (e) {}
+    if (live.eng) live.eng.pattern = live.pattern;
+    updateSettingsUi();
+  }
   var manifestUrl = new URLSearchParams(location.search).get("manifest") || "manifest.json";
   var baseUrl = manifestUrl.replace(/[^\/]*$/, "");
   var cache = {};
@@ -429,14 +513,20 @@
     return Object.keys(s).map(Number).sort(function (a, b) { return a - b; });
   }
   function stylesAt(g, h) {
-    return g.items.filter(function (it) { return it.hinge === h; }).map(function (it) { return it.style; })
-      .sort(function (a, b) { return STYLE_ORDER.indexOf(a) - STYLE_ORDER.indexOf(b); });
+    var st = g.items.filter(function (it) { return it.hinge === h; }).map(function (it) { return it.style; });
+    if (st.indexOf("motion") < 0 && liveHas(g, h)) st.push("motion");      // drawn live, no file needed
+    return st.sort(function (a, b) { return STYLE_ORDER.indexOf(a) - STYLE_ORDER.indexOf(b); });
   }
   function current() {
     var g = groups[gi]; if (!g) return null;
-    var st = stylesAt(g, hinge);
+    var st = stylesAt(g, hinge), found = null;
     var style = st.indexOf(wantStyle) >= 0 ? wantStyle : (st.indexOf("color") >= 0 ? "color" : st[0]);
-    for (var k = 0; k < g.items.length; k++) if (g.items[k].hinge === hinge && g.items[k].style === style) return g.items[k];
+    for (var k = 0; k < g.items.length; k++) if (g.items[k].hinge === hinge && g.items[k].style === style) { found = g.items[k]; break; }
+    if (style === "motion" && liveHas(g, hinge)) return { file: found ? found.file : null, hinge: hinge, style: "motion", live: true };
+    return found;
+  }
+  function stillFile(g, h) {      // the colour still of a scene and angle (poster / save link for a live picture)
+    for (var k = 0; k < g.items.length; k++) if (g.items[k].hinge === h && g.items[k].style === "color") return g.items[k].file;
     return null;
   }
   function nearestHinge(g, h) {
@@ -612,6 +702,8 @@
   function updateSettingsUi() {
     var pl = panelLayout(), it = current();
     $("bSizeTrue").className = fitMode ? "" : "on"; $("bFit").className = fitMode ? "on" : "";
+    $("setPatternRow").style.display = media.live ? "" : "none";
+    $("bPatAzure").className = live.pattern === "azure" ? "on" : ""; $("bPatMono").className = live.pattern === "mono" ? "on" : "";
     $("setSizeSub").textContent = fitMode ? "Scaled to fit: the 3D will not work" : pl ? "Scaled to the panel's true size" : "One image pixel per display pixel";
     $("setAlignNote").textContent = pl ? "" : fitMode ? "Not available in the fit preview."
       : "Automatic on this display: the picture is centred. These settings apply on the iPhone Duo, where iOS keeps a status strip beside the page.";
@@ -662,6 +754,7 @@
     [img, vid].forEach(function (el) {                 // the still and the video share one box
       el.style.width = w + "px"; el.style.height = h + "px"; el.style.left = left + "px"; el.style.top = top + "px";
     });
+    if (media.live) liveLayout(left, top, w, h);
     updateSettingsUi();
   }
   function preload(file) {
@@ -672,7 +765,10 @@
   function show() {
     var it = current();
     if (!it) { msg.textContent = "No image for this selection."; msg.style.display = "block"; return; }
-    var url = baseUrl + it.file, token = ++showToken;
+    var token = ++showToken;
+    if (it.live) { showLive(); finishShow(it, baseUrl + (stillFile(groups[gi], hinge) || it.file || "")); return; }
+    if (media.live) stopLive();
+    var url = baseUrl + it.file;
     if (isVideoFile(it.file)) { showVideo(it, url); finishShow(it, url); return; }
     if (media.video) stopVideo();
     var pre = preload(it.file);
@@ -979,7 +1075,7 @@
   function setPixTest(on) {
     pixTest = on;
     var c = $("pixtest");
-    if (!on) { c.style.display = "none"; (media.video ? vid : img).style.display = "block"; return; }
+    if (!on) { c.style.display = "none"; (media.live ? cv : media.video ? vid : img).style.display = "block"; return; }
     var r = dpr(), W = Math.round(window.innerWidth * r), H = Math.round(window.innerHeight * r);
     c.width = W; c.height = H; c.style.width = (W / r) + "px"; c.style.height = (H / r) + "px";
     var ctx = c.getContext("2d"), data = ctx.createImageData(W, H), a = data.data;
@@ -991,7 +1087,7 @@
     }
     ctx.putImageData(data, 0, 0);
     ctx.fillStyle = "#ff3030"; ctx.fillRect(0, 0, 1, H); ctx.fillRect(W - 1, 0, 1, H); ctx.fillRect(0, 0, W, 1); ctx.fillRect(0, H - 1, W, 1);
-    c.style.display = "block"; img.style.display = "none"; vid.style.display = "none";
+    c.style.display = "block"; img.style.display = "none"; vid.style.display = "none"; cv.style.display = "none";
     msg.style.display = "none";
   }
 
@@ -1040,6 +1136,9 @@
           : (nw === devW && nh === devH ? "NO - viewport does not cover the whole screen"
           : "NO - viewport is " + (devW - nw) + " x " + (devH - nh) + " device px larger than the image"))),
       "",
+      "moving pictures     " + (media.live ? "drawn live (WebGL2) on a " + live.eng.grid.W + " x " + live.eng.grid.H + " grid" +
+          (live.scale < 1 ? " (reduced to " + Math.round(live.scale * 100) + "% for speed)" : "") + (live.fps ? ", " + live.fps.toFixed(0) + " fps" : "")
+        : live.ok ? "live renderer ready" : media.video ? "pre-rendered video" : "live renderer not available on this browser"),
       "userAgent           " + navigator.userAgent
     ];
     var t = $("diagText"); t.textContent = lines.join("\n");
@@ -1106,6 +1205,7 @@
   $("bMenu").onclick = openMenu; $("bMenuClose").onclick = closeSheets;
   $("bSettings").onclick = function () { if (settingsOpen()) closeSettings(); else openSettings(); };
   $("bSetClose").onclick = closeSettings;
+  $("bPatAzure").onclick = function () { setPattern("azure"); }; $("bPatMono").onclick = function () { setPattern("mono"); };
   $("bTheme").onclick = function () { setTheme(currentTheme() === "dark" ? "light" : "dark"); };
   $("bDiag").onclick = openDiag; $("bDiagClose").onclick = closeSheets;
   $("bPrev").onclick = $("bSetAngleDown").onclick = function () { stepHinge(-1); };
@@ -1191,6 +1291,7 @@
     if (!groups.length) throw new Error("manifest has no images");
     var hadHash = !!location.hash;
     restoreFromHash();
+    liveInit();
     var resumed = !hadHash && restoreView();          // a relaunch picks up the last picture
     show(); toggleOverlay(true);
     $("guideP").style.display = $("setGuideRow").style.display = hasGuide() ? "" : "none";
