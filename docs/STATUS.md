@@ -20,8 +20,21 @@ Virtual-viewer results, plaque at 120 deg, half resolution, colour dots:
 | Flat SIRDS shown on the fold (quarter res) | 7.1 | 64 |
 
 Open items:
-- `tests/test_verify.py::test_vertical_head_offset_is_compensated` is xfail: the
-  stereo matcher's two-pass, fixation-nearest peak selection was left unfinished.
+- Resolved: `tests/test_verify.py::test_vertical_head_offset_is_compensated` now passes
+  (xfail removed). The two-pass, fixation-nearest peak selection was already complete;
+  the failure was in vertical compensation. The dv estimate locked to whole pixels
+  (median error 0.4 px vs a design field of about ±0.7 px that changes sign at the
+  hinge), and one-sided bilinear resampling blurred only the right view. Fixes in
+  `reconstruct_depth`: the dv field is estimated on Gaussian-prefiltered views
+  (`field_smooth_px=0.7`), `_vertical_field` patch/step scale with retinal width
+  (64/16 px at 400 px wide), and when the right view is resampled both views get a
+  vertical-only blur (`match_vsmooth_px=0.5`). At the design position nothing changes.
+  Quarter-res test double at dy=10 mm: linkable valid 0.43 -> 0.64, est/design
+  vertical p95 4.3/4.2 arcmin. Half-res real encodes: depth error and plaque kink
+  within 0.01 mm / 0.02 deg of the table above; valid fraction at dy=20 mm 0.83 -> 0.88.
+  An isotropic prefilter for matching was rejected: it pushed the flat-SIRDS
+  baseline's "valid" fraction from 0.27 to 0.51 at 9 % inliers, so it made the
+  verifier too permissive.
 - Depth error for distance offsets is measured against absolute ground truth, so it
   includes the expected rescaling of depth with distance, not only distortion.
 - Nothing has been viewed on a real iPhone Duo yet. Human fusion is unverified.

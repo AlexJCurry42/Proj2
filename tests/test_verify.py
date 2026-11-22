@@ -337,9 +337,6 @@ def test_integration_evaluate_real_encoder(name):
         assert e["plaque_kink_deg"] < 1.0
 
 
-@pytest.mark.xfail(reason="Matcher refinement for vertical head offsets was interrupted mid-rewrite; "
-                   "at quarter resolution the valid fraction is 0.43 (< 0.6). Real half-resolution "
-                   "encodes give 0.82 at dy=10 mm. Tracked in docs/STATUS.md.", strict=False)
 def test_vertical_head_offset_is_compensated(plaque_case, g120):
     sc, img = plaque_case
     centre = V.design_vertical_disparity(g120, VIEW, sc)
